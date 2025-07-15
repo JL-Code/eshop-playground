@@ -14,6 +14,9 @@ importers:
       vue:
         specifier: ^3.5.17
         version: 3.5.17(typescript@5.8.3)
+      vue-email-editor:
+        specifier: ^2.1.5
+        version: 2.1.5(typescript@5.8.3)
       vue-router:
         specifier: ^4.5.1
         version: 4.5.1(vue@3.5.17(typescript@5.8.3))
@@ -3248,6 +3251,9 @@ packages:
     resolution: {integrity: sha512-6bc58dPYhCMHHuwxldQxO3RRNZ4eCogZ/st++0+fcC1nr0jiGUtAdBJ2qzmLQWSxbtz42pWt4QQMiZ9HvZf5cg==}
     engines: {node: '>=0.10.0'}
 
+  unlayer-types@1.281.0:
+    resolution: {integrity: sha512-YbsljFNAwwzvU+l7ulXZJ83+FpBNi9gd3fT9+nqSLMGPs9BF4Di1AEdNcnMyDH9CJsJfSpcuIOYHuymqnp2+Gw==}
+
   unplugin-utils@0.2.4:
     resolution: {integrity: sha512-8U/MtpkPkkk3Atewj1+RcKIjb5WBimZ/WSLhhR3w6SsIj8XJuKTacSP8g+2JhfSGw0Cb125Y+2zA/IzJZDVbhA==}
     engines: {node: '>=18.12.0'}
@@ -3477,6 +3483,9 @@ packages:
 
   vue-devtools-stub@0.1.0:
     resolution: {integrity: sha512-RutnB7X8c5hjq39NceArgXg28WZtZpGc3+J16ljMiYnFhKvd8hITxSWQSQ5bvldxMDU6gG5mkxl1MTQLXckVSQ==}
+
+  vue-email-editor@2.1.5:
+    resolution: {integrity: sha512-nWbryBWzICkF0rive9n8t05OCE5mcjDEarJwYTzAbINQmFuS54fzzSaxDTeckTurp8Nh5hCe1lsaglQ1qYO9Gw==}
 
   vue-router@4.5.1:
     resolution: {integrity: sha512-ogAF3P97NPm8fJsE4by9dwSYtDwXIY1nFY9T6DyQnGHd1E2Da94w9JIolpe42LJGIl0DwOHBi8TcRPlPGwbTtw==}
@@ -7153,6 +7162,8 @@ snapshots:
     dependencies:
       normalize-path: 2.1.1
 
+  unlayer-types@1.281.0: {}
+
   unplugin-utils@0.2.4:
     dependencies:
       pathe: 2.0.3
@@ -7345,6 +7356,13 @@ snapshots:
       ufo: 1.6.1
 
   vue-devtools-stub@0.1.0: {}
+
+  vue-email-editor@2.1.5(typescript@5.8.3):
+    dependencies:
+      unlayer-types: 1.281.0
+      vue: 3.5.17(typescript@5.8.3)
+    transitivePeerDependencies:
+      - typescript
 
   vue-router@4.5.1(vue@3.5.17(typescript@5.8.3)):
     dependencies:
