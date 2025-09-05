@@ -5,9 +5,17 @@ export default defineNuxtConfig({
   compatibilityDate: "2025-05-15",
   ssr: false,
   devtools: { enabled: true },
+
   nitro: {
     rollupConfig: {
       plugins: [vue()],
     },
+  },
+
+  modules: ["@element-plus/nuxt"],
+  elementPlus: {
+    // 可选配置
+    icon: "ElIcon",
+    importStyle: "scss",
   },
 });
