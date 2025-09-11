@@ -1,6 +1,7 @@
 <template>
   <div>
     <EditorEmail title="测试" />
+    <ContextMenu />
   </div>
 </template>
 

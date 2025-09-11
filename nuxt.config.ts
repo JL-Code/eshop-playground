@@ -12,7 +12,7 @@ export default defineNuxtConfig({
     },
   },
 
-  modules: ["@element-plus/nuxt", "@unocss/nuxt"],
+  modules: ["@element-plus/nuxt", "@unocss/nuxt", "@vueuse/nuxt"],
   elementPlus: {
     // 可选配置
     icon: "ElIcon",
