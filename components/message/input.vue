@@ -1,5 +1,9 @@
 <template>
   <div class="message-box">
+    <!-- debug -->
+    <div class="flex" v-if="debug">
+      <div>isEmpty: {{ isEmpty }}</div>
+    </div>
     <!-- 可编辑输入框 -->
     <div
       ref="editableDiv"
@@ -41,8 +45,8 @@
         type="success"
         :icon="Position"
         size="small"
-        @click="handleSend"
         :disabled="isEmpty"
+        @click="handleSend"
       >
         发送
       </el-button>
@@ -62,17 +66,72 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { Upload, Picture, Position } from "@element-plus/icons-vue";
 import type { UploadFile } from "element-plus";
 
+withDefaults(
+  defineProps<{
+    debug?: boolean;
+  }>(),
+  {
+    debug: true,
+  }
+);
+
 const editableDiv = ref<HTMLDivElement | null>(null);
 const uploadRef = ref();
 const isDragOver = ref(false);
 const previewVisible = ref(false);
 const previewImage = ref("");
 
+// 用于追踪编辑器内容变化的响应式变量
+const editorContent = ref("");
+
 // 计算输入框是否为空
 const isEmpty = computed(() => {
-  if (!editableDiv.value) return true;
-  const content = editableDiv.value.innerHTML.trim();
+  const content = editorContent.value.trim();
   return content === "" || content === "<br>";
+});
+
+// 更新编辑器内容的函数
+const updateEditorContent = () => {
+  if (editableDiv.value) {
+    editorContent.value = editableDiv.value.innerHTML;
+  }
+};
+
+// 监听编辑器内容变化
+const setupContentWatcher = () => {
+  if (editableDiv.value) {
+    // 初始化内容
+    updateEditorContent();
+
+    // 监听输入事件
+    editableDiv.value.addEventListener("input", updateEditorContent);
+    editableDiv.value.addEventListener("keyup", updateEditorContent);
+    editableDiv.value.addEventListener("paste", () => {
+      // 延迟更新，确保粘贴内容已经插入
+      nextTick(() => {
+        updateEditorContent();
+      });
+    });
+    editableDiv.value.addEventListener("drop", () => {
+      // 延迟更新，确保拖拽内容已经插入
+      nextTick(() => {
+        updateEditorContent();
+      });
+    });
+  }
+};
+
+// 在组件挂载后设置监听器
+onMounted(() => {
+  setupContentWatcher();
+});
+
+// 清理事件监听器
+onUnmounted(() => {
+  if (editableDiv.value) {
+    editableDiv.value.removeEventListener("input", updateEditorContent);
+    editableDiv.value.removeEventListener("keyup", updateEditorContent);
+  }
 });
 
 // 处理粘贴事件
@@ -100,7 +159,7 @@ const handlePaste = (e: ClipboardEvent) => {
   }
 };
 
-// 拖拽相关事件处理
+// ============== 拖拽相关事件处理 ===============
 const handleDragOver = (e: DragEvent) => {
   e.preventDefault();
 };
@@ -223,6 +282,8 @@ const insertImage = (file: File) => {
         });
         img.remove();
         ElMessage.success("图片已删除");
+        // 更新编辑器内容状态
+        updateEditorContent();
       } catch {
         // 用户取消删除
       }
@@ -241,15 +302,28 @@ const insertImage = (file: File) => {
     range.collapse(true);
     selection?.removeAllRanges();
     selection?.addRange(range);
+
+    // 更新编辑器内容状态
+    updateEditorContent();
   };
 
   reader.readAsDataURL(file);
   ElMessage.success("图片上传成功");
 };
 
-// 发送消息
+/**
+ * 处理发送消息
+ */
 const handleSend = () => {
-  if (!editableDiv.value || isEmpty.value) {
+  if (!editableDiv.value) {
+    ElMessage.warning("请输入消息内容");
+    return;
+  }
+
+  const content = editableDiv.value.innerHTML.trim();
+  console.log(content);
+
+  if (isEmpty.value) {
     ElMessage.warning("请输入消息内容");
     return;
   }
@@ -280,6 +354,9 @@ const handleSend = () => {
   // 清空输入框
   editableDiv.value.innerHTML = "";
 
+  // 更新编辑器内容状态
+  updateEditorContent();
+
   ElMessage.success(`发送了 ${messages.length} 条消息`);
 };
 
@@ -289,7 +366,7 @@ nextTick(() => {
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .message-box {
   position: relative;
   border: 1px solid var(--el-border-color);
