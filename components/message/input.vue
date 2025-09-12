@@ -66,8 +66,10 @@
  */
 
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Upload, Picture, Folder, Position } from "@element-plus/icons-vue";
+import { Upload, Picture, Position, Folder } from "@element-plus/icons-vue";
 import type { UploadFile } from "element-plus";
+import { createQiniuUploadService } from "~/composables/qiniu-upload";
+import type { UploadTask } from "~/composables/qiniu-upload";
 
 const props = withDefaults(
   defineProps<{
@@ -80,11 +82,64 @@ const props = withDefaults(
   }
 );
 
+// 定义事件
+const emits = defineEmits<{
+  'message-group-ready': [messageGroup: {
+    id: string;
+    messages: MessageContent[];
+    uploadedFiles: { url: string; key: string; fileName: string }[];
+  }];
+  'upload-progress': [progress: { groupId: string; percent: number; uploadingCount: number }];
+  'upload-error': [error: { groupId: string; message: string; failedFiles: string[] }];
+}>();
+
 const editableDiv = ref<HTMLDivElement | null>(null);
 const uploadRef = ref();
 const isDragOver = ref(false);
 const previewVisible = ref(false);
 const previewImage = ref("");
+
+// 七牛云上传服务
+const qiniuUploadService = ref<ReturnType<typeof createQiniuUploadService> | null>(null);
+
+// 初始化七牛云上传服务
+const initQiniuService = () => {
+  if (!qiniuUploadService.value) {
+    qiniuUploadService.value = createQiniuUploadService(
+      async (fileKey: string) => {
+        // 获取上传token的函数，需要根据实际情况实现
+        const response = await fetch('http://localhost:8081/oss/qiniu/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ fileKey }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('获取上传token失败');
+        }
+        
+        const data = await response.json();
+        if (!data.token || !data.key || !data.fname) {
+          throw new Error('token响应格式错误');
+        }
+        
+        return data;
+      },
+      {
+        region: 'z2', // 华南区域
+        domain: 'upload.qiniup.com',
+      }
+    );
+  }
+};
+
+// 组件挂载时初始化服务
+onMounted(() => {
+  setupContentWatcher();
+  initQiniuService();
+});
 
 // 用于追踪编辑器内容变化的响应式变量
 const editorContent = ref("");
@@ -146,10 +201,32 @@ const setupContentWatcher = () => {
   }
 };
 
-// 在组件挂载后设置监听器
-onMounted(() => {
-  setupContentWatcher();
-});
+// 消息组管理
+const messageGroup = ref<{
+  id: string;
+  messages: MessageContent[];
+  uploadTasks: UploadTask[];
+  isUploading: boolean;
+  uploadProgress: number;
+} | null>(null);
+
+// 生成消息组ID
+const generateMessageGroupId = (): string => {
+  return `msg_group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
+// 计算上传进度
+const calculateUploadProgress = (tasks: UploadTask[]): number => {
+  if (tasks.length === 0) return 100;
+  
+  const totalProgress = tasks.reduce((sum, task) => sum + task.progress.percent, 0);
+  return Math.round(totalProgress / tasks.length);
+};
+
+// 检查所有文件是否上传完成
+const areAllFilesUploaded = (tasks: UploadTask[]): boolean => {
+  return tasks.every(task => task.status === 'success');
+};
 
 // 清理事件监听器
 onUnmounted(() => {
@@ -517,7 +594,6 @@ const insertFileElement = (file: File) => {
   editableDiv.value?.appendChild(space);
 
   updateEditorContent();
-  ElMessage.success("文件上传成功");
 };
 
 // 获取文件图标
@@ -609,16 +685,22 @@ const insertImageElement = (file: File) => {
 };
 
 /**
- * 处理发送消息
+ * 处理发送消息 - 支持异步文件上传
  */
-const handleSend = () => {
+const handleSend = async () => {
   if (!editableDiv.value || isEmpty.value) {
     ElMessage.warning("请输入消息内容");
     return;
   }
 
+  if (!qiniuUploadService.value) {
+    ElMessage.error("上传服务未初始化");
+    return;
+  }
+
   const nodes = editableDiv.value.childNodes;
   const messages: MessageContent[] = [];
+  const filesToUpload: { file: File; messageIndex: number; node: Node }[] = [];
   let buffer = "";
 
   // 辅助函数：根据文件扩展名或MIME类型判断消息类型
@@ -660,7 +742,31 @@ const handleSend = () => {
     return "FILE";
   };
 
-  nodes.forEach((node) => {
+  // 从blob URL获取File对象
+  const getFileFromBlobUrl = async (blobUrl: string, node: Node): Promise<File | null> => {
+    try {
+      if (node.nodeName === "IMG") {
+        // 对于图片，从img元素获取文件信息
+        const img = node as HTMLImageElement;
+        const response = await fetch(blobUrl);
+        const blob = await response.blob();
+        const fileName = `image_${Date.now()}.${blob.type.split('/')[1] || 'png'}`;
+        return new File([blob], fileName, { type: blob.type });
+      } else if (node.nodeName === "DIV" && (node as any).fileData) {
+        // 对于文件元素，从fileData获取信息
+        const fileData = (node as any).fileData;
+        const response = await fetch(blobUrl);
+        const blob = await response.blob();
+        return new File([blob], fileData.name, { type: blob.type });
+      }
+    } catch (error) {
+      console.error('获取文件失败:', error);
+    }
+    return null;
+  };
+
+  // 解析消息内容
+  for (const node of nodes) {
     if (node.nodeName === "IMG") {
       // 遇到图片 => 先推送文字消息，再推送图片消息
       if (buffer.trim()) {
@@ -673,71 +779,31 @@ const handleSend = () => {
       }
 
       const imgSrc = (node as HTMLImageElement).src;
-      messages.push({
-        type: "IMAGE",
-        tempId: Date.now() + Math.random(),
-        content: imgSrc,
-        url: imgSrc,
-      });
-    } else if (node.nodeName === "VIDEO") {
-      // 处理视频元素
-      if (buffer.trim()) {
+      const messageIndex = messages.length;
+      
+      // 如果是blob URL，需要上传
+      if (imgSrc.startsWith('blob:')) {
+        const file = await getFileFromBlobUrl(imgSrc, node);
+        if (file) {
+          filesToUpload.push({ file, messageIndex, node });
+        }
+        
         messages.push({
-          type: "TEXT",
+          type: "IMAGE",
           tempId: Date.now() + Math.random(),
-          content: buffer.trim(),
+          content: "[图片上传中...]",
+          url: imgSrc, // 临时URL，上传完成后会更新
         });
-        buffer = "";
-      }
-
-      const videoSrc = (node as HTMLVideoElement).src;
-      messages.push({
-        type: "VIDEO",
-        tempId: Date.now() + Math.random(),
-        content: videoSrc,
-        url: videoSrc,
-      });
-    } else if (node.nodeName === "AUDIO") {
-      // 处理音频元素
-      if (buffer.trim()) {
+      } else {
         messages.push({
-          type: "TEXT",
+          type: "IMAGE",
           tempId: Date.now() + Math.random(),
-          content: buffer.trim(),
+          content: imgSrc,
+          url: imgSrc,
         });
-        buffer = "";
       }
-
-      const audioSrc = (node as HTMLAudioElement).src;
-      messages.push({
-        type: "VOICE",
-        tempId: Date.now() + Math.random(),
-        content: audioSrc,
-        url: audioSrc,
-      });
-    } else if (node.nodeName === "A") {
-      // 处理链接元素
-      const linkElement = node as HTMLAnchorElement;
-      const linkText = linkElement.textContent || linkElement.href;
-      const linkHref = linkElement.href;
-
-      if (buffer.trim()) {
-        messages.push({
-          type: "TEXT",
-          tempId: Date.now() + Math.random(),
-          content: buffer.trim(),
-        });
-        buffer = "";
-      }
-
-      messages.push({
-        type: "LINK",
-        tempId: Date.now() + Math.random(),
-        content: linkText,
-        url: linkHref,
-      });
     } else if (node.nodeName === "DIV" && (node as any).fileData) {
-      // 处理文件元素（PDF、视频、音频、文档等）
+      // 处理文件元素
       if (buffer.trim()) {
         messages.push({
           type: "TEXT",
@@ -748,18 +814,41 @@ const handleSend = () => {
       }
 
       const fileData = (node as any).fileData;
-      messages.push({
-        type: fileData.type,
-        tempId: Date.now() + Math.random(),
-        content: fileData.name,
-        url: fileData.url,
-        payload: {
-          key: fileData.url,
-          fileName: fileData.name,
-          fileSize: fileData.size,
+      const messageIndex = messages.length;
+      
+      // 如果是blob URL，需要上传
+      if (fileData.url.startsWith('blob:')) {
+        const file = await getFileFromBlobUrl(fileData.url, node);
+        if (file) {
+          filesToUpload.push({ file, messageIndex, node });
+        }
+        
+        messages.push({
+          type: fileData.type,
+          tempId: Date.now() + Math.random(),
+          content: `[${fileData.name} 上传中...]`,
+          url: fileData.url, // 临时URL，上传完成后会更新
+          payload: {
+            key: "", // 上传完成后填充
+            fileName: fileData.name,
+            fileSize: fileData.size,
+            url: "", // 上传完成后填充
+          },
+        });
+      } else {
+        messages.push({
+          type: fileData.type,
+          tempId: Date.now() + Math.random(),
+          content: fileData.name,
           url: fileData.url,
-        },
-      });
+          payload: {
+            key: fileData.url,
+            fileName: fileData.name,
+            fileSize: fileData.size,
+            url: fileData.url,
+          },
+        });
+      }
     } else {
       // 处理文本内容，检查是否包含URL
       const textContent = node.textContent || "";
@@ -801,7 +890,7 @@ const handleSend = () => {
         buffer += textContent;
       }
     }
-  });
+  }
 
   // 处理剩余的文本内容
   if (buffer.trim()) {
@@ -812,15 +901,125 @@ const handleSend = () => {
     });
   }
 
-  console.log("拆分后的消息：", messages);
+  // 创建消息组
+  const groupId = generateMessageGroupId();
+  messageGroup.value = {
+    id: groupId,
+    messages,
+    uploadTasks: [],
+    isUploading: filesToUpload.length > 0,
+    uploadProgress: 0,
+  };
 
   // 清空输入框
   editableDiv.value.innerHTML = "";
-
-  // 更新编辑器内容状态
   updateEditorContent();
 
-  ElMessage.success(`发送了 ${messages.length} 条消息`);
+  // 如果没有文件需要上传，直接触发消息准备完毕事件
+  if (filesToUpload.length === 0) {
+    emits('message-group-ready', {
+      id: groupId,
+      messages,
+      uploadedFiles: [],
+    });
+    ElMessage.success(`消息准备完毕，包含 ${messages.length} 条内容`);
+    return;
+  }
+
+  // 开始上传文件
+  ElMessage.info(`开始上传 ${filesToUpload.length} 个文件...`);
+  
+  const uploadTasks: UploadTask[] = [];
+  const uploadedFiles: { url: string; key: string; fileName: string }[] = [];
+  let completedCount = 0;
+  let hasError = false;
+  const failedFiles: string[] = [];
+
+  // 上传每个文件
+  for (const { file, messageIndex } of filesToUpload) {
+    try {
+      const task = await qiniuUploadService.value.upload(
+        file,
+        undefined, // 让服务端生成key
+        (progress) => {
+          // 更新上传进度
+          const totalProgress = calculateUploadProgress(uploadTasks);
+          messageGroup.value!.uploadProgress = totalProgress;
+          
+          emits('upload-progress', {
+            groupId,
+            percent: totalProgress,
+            uploadingCount: uploadTasks.filter(t => t.status === 'uploading').length,
+          });
+        },
+        (status) => {
+          if (status === 'success') {
+            completedCount++;
+            
+            // 更新消息中的URL
+            if (task.url) {
+              messages[messageIndex].url = task.url;
+              messages[messageIndex].content = messages[messageIndex].type === 'IMAGE' 
+                ? task.url 
+                : file.name;
+              
+              if (messages[messageIndex].payload) {
+                messages[messageIndex].payload!.url = task.url;
+                messages[messageIndex].payload!.key = task.key;
+              }
+              
+              uploadedFiles.push({
+                url: task.url,
+                key: task.key,
+                fileName: file.name,
+              });
+            }
+            
+            // 检查是否所有文件都上传完成
+            if (completedCount === filesToUpload.length && !hasError) {
+              messageGroup.value!.isUploading = false;
+              messageGroup.value!.uploadProgress = 100;
+              
+              emits('message-group-ready', {
+                id: groupId,
+                messages,
+                uploadedFiles,
+              });
+              
+              ElMessage.success(`所有文件上传完成，消息准备完毕`);
+            }
+          } else if (status === 'error') {
+            hasError = true;
+            failedFiles.push(file.name);
+            
+            emits('upload-error', {
+              groupId,
+              message: `文件 ${file.name} 上传失败`,
+              failedFiles,
+            });
+            
+            ElMessage.error(`文件 ${file.name} 上传失败`);
+          }
+        }
+      );
+      
+      uploadTasks.push(task);
+      messageGroup.value!.uploadTasks = uploadTasks;
+      
+    } catch (error) {
+      hasError = true;
+      failedFiles.push(file.name);
+      console.error(`文件 ${file.name} 上传失败:`, error);
+      
+      emits('upload-error', {
+        groupId,
+        message: `文件 ${file.name} 上传失败: ${error}`,
+        failedFiles,
+      });
+      
+      ElMessage.error(`文件 ${file.name} 上传失败`);
+    }
+  }
 };
 
 // 组件挂载后设置焦点
