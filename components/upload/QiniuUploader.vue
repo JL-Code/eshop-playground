@@ -268,7 +268,13 @@ const handleFiles = async (files: FileList | File[]) => {
           // 更新任务列表中的进度
           const taskIndex = tasks.value.findIndex((t) => t.id === task.id);
           if (taskIndex !== -1) {
-            tasks.value[taskIndex].progress = progress;
+            // 创建新的progress对象来触发响应式更新
+            tasks.value[taskIndex] = {
+              ...tasks.value[taskIndex],
+              progress: { ...progress },
+            };
+            // 同步更新task对象的progress
+            task.progress = progress;
           }
           emits("progress", task);
         },
@@ -276,15 +282,19 @@ const handleFiles = async (files: FileList | File[]) => {
           // 更新任务状态
           const taskIndex = tasks.value.findIndex((t) => t.id === task.id);
           if (taskIndex !== -1) {
-            tasks.value[taskIndex].status = status;
+            // 创建新的task对象来触发响应式更新
+            tasks.value[taskIndex] = {
+              ...tasks.value[taskIndex],
+              status: status,
+            };
+            // 同步更新task对象的status
+            task.status = status;
           }
 
           if (status === UploadStatus.SUCCESS) {
             emits("success", task);
-            ElMessage.success(`${file.name} 上传成功`);
           } else if (status === UploadStatus.ERROR) {
             emits("error", task);
-            ElMessage.error(`${file.name} 上传失败`);
           }
         }
       );
@@ -336,6 +346,14 @@ const handleDrop = (e: DragEvent) => {
 // 任务操作
 const pauseTask = (taskId: string) => {
   if (uploadService.value?.pause(taskId)) {
+    // 更新UI中的任务状态
+    const taskIndex = tasks.value.findIndex((t) => t.id === taskId);
+    if (taskIndex !== -1) {
+      tasks.value[taskIndex] = {
+        ...tasks.value[taskIndex],
+        status: UploadStatus.PAUSED
+      };
+    }
     ElMessage.info("任务已暂停");
   }
 };
@@ -351,14 +369,26 @@ const resumeTask = async (taskId: string) => {
     (progress) => {
       const taskIndex = tasks.value.findIndex((t) => t.id === taskId);
       if (taskIndex !== -1) {
-        tasks.value[taskIndex].progress = progress;
+        // 创建新的progress对象来触发响应式更新
+        tasks.value[taskIndex] = {
+          ...tasks.value[taskIndex],
+          progress: { ...progress },
+        };
+        // 同步更新task对象的progress
+        task.progress = progress;
       }
       emits("progress", task);
     },
     (status) => {
       const taskIndex = tasks.value.findIndex((t) => t.id === taskId);
       if (taskIndex !== -1) {
-        tasks.value[taskIndex].status = status;
+        // 创建新的task对象来触发响应式更新
+        tasks.value[taskIndex] = {
+          ...tasks.value[taskIndex],
+          status: status,
+        };
+        // 同步更新task对象的status
+        task.status = status;
       }
 
       if (status === UploadStatus.SUCCESS) {
@@ -395,9 +425,15 @@ const retryTask = async (taskId: string) => {
 
 // 批量操作
 const pauseAll = () => {
-  tasks.value.forEach((task) => {
+  tasks.value.forEach((task, index) => {
     if (task.status === UploadStatus.UPLOADING) {
-      uploadService.value?.pause(task.id);
+      if (uploadService.value?.pause(task.id)) {
+        // 更新UI中的任务状态
+        tasks.value[index] = {
+          ...tasks.value[index],
+          status: UploadStatus.PAUSED
+        };
+      }
     }
   });
   ElMessage.info("所有任务已暂停");

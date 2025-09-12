@@ -172,11 +172,17 @@ useHead({
 
 // 配置数据
 const config = reactive({
-  domain: 'https://your-domain.qiniucdn.com',
-  tokenUrl: 'http://localhost:8081/oss/qiniu/token',
+  /**
+   * OSS 上传域名，不带 http 协议
+   */
+  domain: "upload.qiniup.com",
+  /**
+   * 上传令牌接口
+   */
+  tokenUrl: "http://localhost:8081/oss/qiniu/token",
   maxFileSize: 100,
   maxConcurrent: 3,
-  allowedTypes: ['*']
+  allowedTypes: ["*"],
 });
 
 // 统计数据
