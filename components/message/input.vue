@@ -1,8 +1,9 @@
 <template>
   <div class="message-box">
     <!-- debug -->
-    <div class="flex" v-if="debug">
+    <div class="flex gap-4" v-if="debug">
       <div>isEmpty: {{ isEmpty }}</div>
+      <div>文件数量: {{ getCurrentFileCount() }} / {{ props.maxFiles }}</div>
     </div>
     <!-- 可编辑输入框 -->
     <div
@@ -36,15 +37,12 @@
         :auto-upload="false"
         @change="handleFileUpload"
       >
-        <el-button type="primary" :icon="Picture" size="small">
-          上传文件
-        </el-button>
+        <el-button :icon="Folder" circle />
       </el-upload>
 
       <el-button
         type="success"
         :icon="Position"
-        size="small"
         :disabled="isEmpty"
         @click="handleSend"
       >
@@ -68,15 +66,17 @@
  */
 
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Upload, Picture, Position } from "@element-plus/icons-vue";
+import { Upload, Picture, Folder, Position } from "@element-plus/icons-vue";
 import type { UploadFile } from "element-plus";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     debug?: boolean;
+    maxFiles?: number; // 最大文件数量限制
   }>(),
   {
     debug: true,
+    maxFiles: 9,
   }
 );
 
@@ -88,6 +88,26 @@ const previewImage = ref("");
 
 // 用于追踪编辑器内容变化的响应式变量
 const editorContent = ref("");
+
+// 获取当前编辑器中的文件数量
+const getCurrentFileCount = (): number => {
+  if (!editableDiv.value) return 0;
+
+  const images = editableDiv.value.querySelectorAll("img");
+  const fileDivs = editableDiv.value.querySelectorAll(
+    'div[contenteditable="false"]'
+  );
+  const videos = editableDiv.value.querySelectorAll("video");
+  const audios = editableDiv.value.querySelectorAll("audio");
+
+  return images.length + fileDivs.length + videos.length + audios.length;
+};
+
+// 检查是否可以添加更多文件
+const canAddMoreFiles = (newFileCount: number = 1): boolean => {
+  const currentCount = getCurrentFileCount();
+  return currentCount + newFileCount <= props.maxFiles;
+};
 
 // 计算输入框是否为空
 const isEmpty = computed(() => {
@@ -199,6 +219,16 @@ const handleDrop = (e: DragEvent) => {
 
   const files = e.dataTransfer?.files;
   if (files && files.length > 0) {
+    // 检查文件数量限制
+    if (!canAddMoreFiles(files.length)) {
+      const currentCount = getCurrentFileCount();
+      const remaining = props.maxFiles - currentCount;
+      ElMessage.error(
+        `最多只能添加 ${props.maxFiles} 个文件，当前已有 ${currentCount} 个，还可添加 ${remaining} 个`
+      );
+      return;
+    }
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (isSupportedFile(file)) {
@@ -240,6 +270,7 @@ const supportedFileTypes = {
     "audio/flac",
     "audio/m4a",
     "audio/wma",
+    "audio/mpeg",
   ],
   document: [
     "application/pdf",
@@ -375,6 +406,15 @@ const beforeUpload = (file: File) => {
 // 处理文件上传
 const handleFileUpload = (file: UploadFile) => {
   if (file.raw) {
+    // 检查文件数量限制
+    if (!canAddMoreFiles(1)) {
+      const currentCount = getCurrentFileCount();
+      const remaining = props.maxFiles - currentCount;
+      ElMessage.error(
+        `最多只能添加 ${props.maxFiles} 个文件，当前已有 ${currentCount} 个，还可添加 ${remaining} 个`
+      );
+      return;
+    }
     insertFile(file.raw);
   }
 };
@@ -382,6 +422,16 @@ const handleFileUpload = (file: UploadFile) => {
 // 统一的文件插入函数
 const insertFile = (file: File) => {
   if (!editableDiv.value) return;
+
+  // 检查文件数量限制（单个文件插入时的额外检查）
+  if (!canAddMoreFiles(1)) {
+    const currentCount = getCurrentFileCount();
+    const remaining = props.maxFiles - currentCount;
+    ElMessage.error(
+      `最多只能添加 ${props.maxFiles} 个文件，当前已有 ${currentCount} 个，还可添加 ${remaining} 个`
+    );
+    return;
+  }
 
   // 验证文件类型和大小
   if (!isSupportedFile(file)) {
@@ -562,15 +612,7 @@ const insertImageElement = (file: File) => {
  * 处理发送消息
  */
 const handleSend = () => {
-  if (!editableDiv.value) {
-    ElMessage.warning("请输入消息内容");
-    return;
-  }
-
-  const content = editableDiv.value.innerHTML.trim();
-  console.log(content);
-
-  if (isEmpty.value) {
+  if (!editableDiv.value || isEmpty.value) {
     ElMessage.warning("请输入消息内容");
     return;
   }
