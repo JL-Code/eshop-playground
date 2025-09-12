@@ -172,11 +172,14 @@ const uploadService = ref<QiniuUploadService | null>(null);
 // Token响应接口已在composables中定义
 
 // Token提供函数
-const getUploadToken = async (fileKey: string): Promise<TokenResponse> => {
+const getUploadToken = async (
+  fileKey: string,
+  keep = false
+): Promise<TokenResponse> => {
   console.log("getUploadToken fileKey", fileKey);
   if (props.tokenUrl) {
     const response = await fetch(
-      `${props.tokenUrl}?fileKey=${encodeURIComponent(fileKey)}`,
+      `${props.tokenUrl}?fileKey=${encodeURIComponent(fileKey)}&keep=${keep}`,
       {
         method: "POST",
         headers: {
@@ -351,7 +354,7 @@ const pauseTask = (taskId: string) => {
     if (taskIndex !== -1) {
       tasks.value[taskIndex] = {
         ...tasks.value[taskIndex],
-        status: UploadStatus.PAUSED
+        status: UploadStatus.PAUSED,
       };
     }
     ElMessage.info("任务已暂停");
@@ -431,7 +434,7 @@ const pauseAll = () => {
         // 更新UI中的任务状态
         tasks.value[index] = {
           ...tasks.value[index],
-          status: UploadStatus.PAUSED
+          status: UploadStatus.PAUSED,
         };
       }
     }

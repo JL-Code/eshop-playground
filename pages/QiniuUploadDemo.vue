@@ -180,8 +180,17 @@ const config = reactive({
    * 上传令牌接口
    */
   tokenUrl: "http://localhost:8081/oss/qiniu/token",
-  maxFileSize: 100,
+  /**
+   * 上传文件大小限制，单位MB
+   */
+  maxFileSize: 300,
+  /**
+   * 最大并发上传数量
+   */
   maxConcurrent: 3,
+  /**
+   * 允许上传的文件类型，* 表示所有类型
+   */
   allowedTypes: ["*"],
 });
 

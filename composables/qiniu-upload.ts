@@ -58,10 +58,13 @@ export interface TokenResponse {
 export class QiniuUploadService {
   private tasks = new Map<string, UploadTask>();
   private config: QiniuConfig;
-  private tokenProvider: (fileKey: string) => Promise<TokenResponse>;
+  private tokenProvider: (
+    fileKey: string,
+    keep?: boolean
+  ) => Promise<TokenResponse>;
 
   constructor(
-    tokenProvider: (fileKey: string) => Promise<TokenResponse>,
+    tokenProvider: (fileKey: string, keep?: boolean) => Promise<TokenResponse>,
     config: QiniuConfig = {}
   ) {
     this.tokenProvider = tokenProvider;
@@ -262,7 +265,7 @@ export class QiniuUploadService {
 
     try {
       // 断点续传必须使用原始的key获取token，确保scope匹配
-      const tokenResponse = await this.tokenProvider(task.originalKey);
+      const tokenResponse = await this.tokenProvider(task.originalKey, true);
 
       task.status = UploadStatus.UPLOADING;
       onStatusChange?.(task.status);
@@ -276,15 +279,15 @@ export class QiniuUploadService {
       // 七牛云SDK支持断点续传，关键是使用相同的file对象和key
       // SDK会根据文件内容hash和key来识别是否为断点续传
       const qiniuConfig: Config = {
-        region: this.config.region || qiniu.region.z2,
         useCdnDomain: this.config.useCdnDomain,
         forceDirect: this.config.forceDirect,
         retryCount: this.config.retryCount,
         concurrentRequestLimit: this.config.concurrentRequestLimit,
         chunkSize: this.config.chunkSize,
         checkByMD5: this.config.checkByMD5,
+        uphost: this.config.domain,
       };
-      
+
       // 使用原始的originalKey而不是tokenResponse.key，确保断点续传生效
       const observable = qiniu.upload(
         task.file,
