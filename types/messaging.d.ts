@@ -115,6 +115,15 @@ interface MessageContent {
   content: string;
   url?: string;
   payload?: MessagePayload;
+  // 上传进度相关字段
+  uploadProgress?: {
+    percent: number;
+    loaded: number;
+    total: number;
+    speed?: number;
+    remainingTime?: number;
+    status: 'uploading' | 'paused' | 'completed' | 'error' | 'cancelled';
+  };
 }
 
 interface MessagePayload {

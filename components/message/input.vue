@@ -56,6 +56,195 @@
         <img :src="previewImage" alt="预览图片" class="preview-img" />
       </div>
     </el-dialog>
+
+    <!-- 文件发送确认框 -->
+    <el-dialog
+      v-model="fileConfirmVisible"
+      title="发送给 c"
+      width="500px"
+      center
+      :close-on-click-modal="false"
+    >
+      <div class="file-confirm-container">
+        <div class="file-list">
+          <div
+            v-for="(file, index) in pendingFiles"
+            :key="index"
+            class="file-item"
+          >
+            <div class="file-info">
+              <div class="file-icon">
+                <span>{{ getFileIcon(getFileType(file)) }}</span>
+              </div>
+              <div class="file-details">
+                <div class="file-name">{{ file.name }}</div>
+                <div class="file-size">
+                  {{ getReadableFileSize(file.size) }}
+                </div>
+              </div>
+            </div>
+            <el-button
+              type="danger"
+              size="small"
+              :icon="Delete"
+              circle
+              @click="removePendingFile(index)"
+            />
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="cancelSendFiles">取消</el-button>
+          <el-button
+            type="primary"
+            @click="confirmSendFiles"
+            :disabled="pendingFiles.length === 0"
+          >
+            发送({{ pendingFiles.length }})
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 文件上传进度显示 -->
+    <el-dialog
+      v-model="showUploadProgress"
+      title="文件上传进度"
+      width="700px"
+      :close-on-click-modal="false"
+      :show-close="false"
+    >
+      <div class="upload-progress-content" v-if="messageGroup">
+        <div class="overall-progress">
+          <div class="progress-header">
+            <span class="progress-title">总体进度</span>
+            <span class="progress-percent"
+              >{{ messageGroup.uploadProgress }}%</span
+            >
+          </div>
+          <el-progress
+            :percentage="messageGroup.uploadProgress"
+            :status="messageGroup.isUploading ? undefined : 'success'"
+          />
+        </div>
+
+        <div class="task-list">
+          <div
+            v-for="task in messageGroup.uploadTasks"
+            :key="task.id"
+            class="task-item"
+          >
+            <div class="task-header">
+              <div class="task-info">
+                <div class="task-icon">
+                  {{ getFileIcon(getFileType(task.file)) }}
+                </div>
+                <div class="task-details">
+                  <div class="task-name">{{ task.file.name }}</div>
+                  <div class="task-size">
+                    {{ getReadableFileSize(task.file.size) }}
+                  </div>
+                </div>
+              </div>
+              <div class="task-status">
+                <el-tag :type="getTaskStatusType(task.status)" size="small">
+                  {{ getTaskStatusText(task.status) }}
+                </el-tag>
+              </div>
+            </div>
+
+            <div class="task-progress">
+              <el-progress
+                :percentage="task.progress.percent"
+                :status="getTaskProgressStatus(task.status)"
+                :show-text="false"
+              />
+              <div class="progress-details">
+                <span class="progress-text">
+                  {{ getReadableFileSize(task.progress.loaded) }} /
+                  {{ getReadableFileSize(task.progress.total) }}
+                </span>
+                <span
+                  v-if="task.progress.speed && task.status === 'uploading'"
+                  class="speed-text"
+                >
+                  {{ formatSpeed(task.progress.speed) }}
+                </span>
+                <span
+                  v-if="
+                    task.progress.remainingTime && task.status === 'uploading'
+                  "
+                  class="time-text"
+                >
+                  剩余 {{ formatTime(task.progress.remainingTime) }}
+                </span>
+              </div>
+            </div>
+
+            <div class="task-actions">
+              <el-button
+                v-if="task.status === 'uploading'"
+                size="small"
+                @click="pauseUploadTask(task.id)"
+              >
+                暂停
+              </el-button>
+              <el-button
+                v-if="task.status === 'paused'"
+                size="small"
+                type="primary"
+                @click="resumeUploadTask(task.id)"
+              >
+                恢复
+              </el-button>
+              <el-button
+                v-if="task.status === 'error'"
+                size="small"
+                type="warning"
+                @click="retryUploadTask(task.id)"
+              >
+                重试
+              </el-button>
+              <el-button
+                v-if="['paused', 'error'].includes(task.status)"
+                size="small"
+                type="danger"
+                @click="cancelUploadTask(task.id)"
+              >
+                取消
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button
+            v-if="messageGroup && !messageGroup.isUploading"
+            type="primary"
+            @click="closeUploadProgress"
+          >
+            完成
+          </el-button>
+          <el-button
+            v-if="messageGroup && messageGroup.isUploading"
+            @click="pauseAllTasks"
+          >
+            全部暂停
+          </el-button>
+          <el-button
+            v-if="messageGroup && messageGroup.isUploading"
+            type="primary"
+            @click="resumeAllTasks"
+          >
+            全部恢复
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -66,7 +255,13 @@
  */
 
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Upload, Picture, Position, Folder } from "@element-plus/icons-vue";
+import {
+  Upload,
+  Picture,
+  Position,
+  Folder,
+  Delete,
+} from "@element-plus/icons-vue";
 import type { UploadFile } from "element-plus";
 import { createQiniuUploadService } from "~/composables/qiniu-upload";
 import type { UploadTask } from "~/composables/qiniu-upload";
@@ -105,6 +300,13 @@ const uploadRef = ref();
 const isDragOver = ref(false);
 const previewVisible = ref(false);
 const previewImage = ref("");
+
+// 文件发送确认框状态
+const fileConfirmVisible = ref(false);
+const pendingFiles = ref<File[]>([]);
+
+// 上传进度显示状态
+const showUploadProgress = ref(false);
 
 // 七牛云上传服务
 const qiniuUploadService = ref<ReturnType<
@@ -327,14 +529,378 @@ const handleDrop = (e: DragEvent) => {
       return;
     }
 
+    const imageFiles: File[] = [];
+    const nonImageFiles: File[] = [];
+    const unsupportedFiles: string[] = [];
+
+    // 分类文件
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      if (isSupportedFile(file)) {
-        insertFile(file);
+
+      if (!isSupportedFile(file)) {
+        unsupportedFiles.push(file.name);
+        continue;
+      }
+
+      const fileType = getFileType(file);
+      if (fileType === "IMAGE") {
+        imageFiles.push(file);
       } else {
-        ElMessage.error(`不支持的文件类型: ${file.name}`);
+        nonImageFiles.push(file);
       }
     }
+
+    // 显示不支持的文件错误
+    if (unsupportedFiles.length > 0) {
+      ElMessage.error(`不支持的文件类型: ${unsupportedFiles.join(", ")}`);
+    }
+
+    // 处理图片文件 - 直接插入到输入框
+    imageFiles.forEach((file) => {
+      insertImageElement(file);
+    });
+
+    // 处理非图片文件 - 显示在确认框中
+    if (nonImageFiles.length > 0) {
+      pendingFiles.value = [...pendingFiles.value, ...nonImageFiles];
+      fileConfirmVisible.value = true;
+    }
+  }
+};
+
+/**
+ * 确认发送文件
+ */
+const confirmSendFiles = async () => {
+  if (!qiniuUploadService.value) {
+    ElMessage.error("上传服务未初始化");
+    return;
+  }
+
+  const fileCount = pendingFiles.value.length;
+  const messages: MessageContent[] = [];
+  const filesToUpload: { file: File; messageIndex: number }[] = [];
+
+  // 为每个文件创建消息
+  pendingFiles.value.forEach((file, index) => {
+    const fileType = getFileType(file);
+    const messageIndex = messages.length;
+
+    // 创建文件消息
+    const fileMessage: MessageContent = {
+      type: fileType,
+      tempId: Date.now() + Math.random() + index,
+      content: `[${file.name} 上传中...]`,
+      url: "", // 上传完成后填充
+      payload: {
+        key: "", // 上传完成后填充
+        fileName: file.name,
+        fileSize: file.size,
+        url: "", // 上传完成后填充
+      },
+    };
+
+    messages.push(fileMessage);
+    filesToUpload.push({ file, messageIndex });
+  });
+
+  // 发送消息事件
+  emits("message", messages);
+
+  // 创建消息组
+  const groupId = generateMessageGroupId();
+  messageGroup.value = {
+    id: groupId,
+    messages,
+    uploadTasks: [],
+    isUploading: true,
+    uploadProgress: 0,
+  };
+
+  // 清空待发送文件列表和关闭确认框
+  pendingFiles.value = [];
+  fileConfirmVisible.value = false;
+
+  const uploadTasks: UploadTask[] = [];
+  const uploadedFiles: { url: string; key: string; fileName: string }[] = [];
+  let completedCount = 0;
+  let hasError = false;
+  const failedFiles: string[] = [];
+
+  // 开始上传每个文件
+  for (const { file, messageIndex } of filesToUpload) {
+    try {
+      const task = await qiniuUploadService.value.upload(
+        file,
+        undefined, // 让服务端生成key
+        (progress) => {
+          // 更新上传进度
+          const totalProgress = calculateUploadProgress(uploadTasks);
+          messageGroup.value!.uploadProgress = totalProgress;
+
+          emits("upload-progress", {
+            groupId,
+            percent: totalProgress,
+            uploadingCount: uploadTasks.filter((t) => t.status === "uploading")
+              .length,
+          });
+        },
+        (status) => {
+          if (status === "success") {
+            completedCount++;
+
+            // 更新消息中的URL和内容
+            if (task.url) {
+              messages[messageIndex].url = task.url;
+              messages[messageIndex].content = file.name;
+
+              if (messages[messageIndex].payload) {
+                messages[messageIndex].payload!.url = task.url;
+                messages[messageIndex].payload!.key = task.key;
+              }
+
+              uploadedFiles.push({
+                url: task.url,
+                key: task.key,
+                fileName: file.name,
+              });
+            }
+
+            // 检查是否所有文件都上传完成
+            if (completedCount === filesToUpload.length && !hasError) {
+              messageGroup.value!.isUploading = false;
+              messageGroup.value!.uploadProgress = 100;
+
+              emits("message-group-ready", {
+                id: groupId,
+                messages,
+                uploadedFiles,
+              });
+
+              ElMessage.success(`所有文件上传完成，消息准备完毕`);
+            }
+          } else if (status === "error") {
+            hasError = true;
+            failedFiles.push(file.name);
+
+            emits("upload-error", {
+              groupId,
+              message: `文件 ${file.name} 上传失败`,
+              failedFiles,
+            });
+
+            ElMessage.error(`文件 ${file.name} 上传失败`);
+          }
+        }
+      );
+
+      uploadTasks.push(task);
+      messageGroup.value!.uploadTasks = uploadTasks;
+    } catch (error) {
+      hasError = true;
+      failedFiles.push(file.name);
+      console.error(`文件 ${file.name} 上传失败:`, error);
+
+      emits("upload-error", {
+        groupId,
+        message: `文件 ${file.name} 上传失败: ${error}`,
+        failedFiles,
+      });
+
+      ElMessage.error(`文件 ${file.name} 上传失败`);
+    }
+  }
+
+  ElMessage.success(`开始上传 ${fileCount} 个文件`);
+
+  // 显示上传进度对话框
+  showUploadProgress.value = true;
+};
+
+// 上传任务管理函数
+const pauseUploadTask = async (taskId: string) => {
+  if (qiniuUploadService.value?.pause(taskId)) {
+    ElMessage.info("任务已暂停");
+  }
+};
+
+const resumeUploadTask = async (taskId: string) => {
+  if (!messageGroup.value) return;
+
+  const task = messageGroup.value.uploadTasks.find((t) => t.id === taskId);
+  if (!task || !qiniuUploadService.value) return;
+
+  const success = await qiniuUploadService.value.resume(
+    taskId,
+    (progress) => {
+      task.progress = progress;
+      const totalProgress = calculateUploadProgress(
+        messageGroup.value!.uploadTasks
+      );
+      messageGroup.value!.uploadProgress = totalProgress;
+
+      emits("upload-progress", {
+        groupId: messageGroup.value!.id,
+        percent: totalProgress,
+        uploadingCount: messageGroup.value!.uploadTasks.filter(
+          (t) => t.status === "uploading"
+        ).length,
+      });
+    },
+    (status) => {
+      task.status = status;
+      if (status === "success" && task.url) {
+        // 更新对应的消息
+        const messageIndex = messageGroup.value!.messages.findIndex(
+          (m) => m.payload?.fileName === task.file.name
+        );
+        if (messageIndex !== -1) {
+          messageGroup.value!.messages[messageIndex].url = task.url;
+          messageGroup.value!.messages[messageIndex].content = task.file.name;
+          if (messageGroup.value!.messages[messageIndex].payload) {
+            messageGroup.value!.messages[messageIndex].payload!.url = task.url;
+            messageGroup.value!.messages[messageIndex].payload!.key = task.key;
+          }
+        }
+        ElMessage.success(`${task.file.name} 上传成功`);
+      } else if (status === "error") {
+        ElMessage.error(`${task.file.name} 上传失败`);
+      }
+    }
+  );
+
+  if (success) {
+    ElMessage.info("任务已恢复");
+  }
+};
+
+const retryUploadTask = async (taskId: string) => {
+  // 重试逻辑：移除失败的任务，重新上传
+  if (!messageGroup.value) return;
+
+  const taskIndex = messageGroup.value.uploadTasks.findIndex(
+    (t) => t.id === taskId
+  );
+  if (taskIndex === -1) return;
+
+  const task = messageGroup.value.uploadTasks[taskIndex];
+  // 这里可以实现重试逻辑，暂时显示提示
+  ElMessage.info(`正在重试上传 ${task.file.name}`);
+};
+
+const cancelUploadTask = (taskId: string) => {
+  if (qiniuUploadService.value?.cancel(taskId)) {
+    ElMessage.info("任务已取消");
+  }
+};
+
+const pauseAllTasks = () => {
+  if (!messageGroup.value) return;
+
+  messageGroup.value.uploadTasks.forEach((task) => {
+    if (task.status === "uploading") {
+      qiniuUploadService.value?.pause(task.id);
+    }
+  });
+  ElMessage.info("所有任务已暂停");
+};
+
+const resumeAllTasks = async () => {
+  if (!messageGroup.value) return;
+
+  for (const task of messageGroup.value.uploadTasks) {
+    if (task.status === "paused") {
+      await resumeUploadTask(task.id);
+    }
+  }
+};
+
+const closeUploadProgress = () => {
+  showUploadProgress.value = false;
+  messageGroup.value = null;
+};
+
+// 状态和格式化函数
+const getTaskStatusType = (status: string) => {
+  switch (status) {
+    case "success":
+      return "success";
+    case "error":
+      return "danger";
+    case "uploading":
+      return "primary";
+    case "paused":
+      return "warning";
+    default:
+      return "info";
+  }
+};
+
+const getTaskStatusText = (status: string) => {
+  switch (status) {
+    case "pending":
+      return "等待中";
+    case "uploading":
+      return "上传中";
+    case "paused":
+      return "已暂停";
+    case "success":
+      return "已完成";
+    case "error":
+      return "上传失败";
+    case "cancelled":
+      return "已取消";
+    default:
+      return "未知状态";
+  }
+};
+
+const getTaskProgressStatus = (status: string) => {
+  switch (status) {
+    case "success":
+      return "success";
+    case "error":
+      return "exception";
+    default:
+      return undefined;
+  }
+};
+
+const formatSpeed = (bytesPerSecond: number) => {
+  if (bytesPerSecond < 1024) {
+    return `${bytesPerSecond.toFixed(0)} B/s`;
+  } else if (bytesPerSecond < 1024 * 1024) {
+    return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`;
+  } else {
+    return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`;
+  }
+};
+
+const formatTime = (seconds: number) => {
+  if (seconds < 60) {
+    return `${Math.round(seconds)}秒`;
+  } else if (seconds < 3600) {
+    return `${Math.round(seconds / 60)}分钟`;
+  } else {
+    return `${Math.round(seconds / 3600)}小时`;
+  }
+};
+
+/**
+ * 取消发送文件
+ */
+const cancelSendFiles = () => {
+  pendingFiles.value = [];
+  fileConfirmVisible.value = false;
+};
+
+/**
+ * 从待发送列表中移除文件
+ */
+const removePendingFile = (index: number) => {
+  pendingFiles.value.splice(index, 1);
+  if (pendingFiles.value.length === 0) {
+    fileConfirmVisible.value = false;
   }
 };
 
@@ -380,6 +946,11 @@ const supportedFileTypes = {
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "text/plain",
     "text/csv",
+    "application/vnd.xmind.workbook",
+    "application/sql",
+    "application/json",
+    "application/javascript",
+    "text/x-java-source",
   ],
   archive: [
     "application/zip",
@@ -429,6 +1000,11 @@ const getMimeTypeByExtension = (filename: string): string => {
     pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     txt: "text/plain",
     csv: "text/csv",
+    xmind: "application/vnd.xmind.workbook",
+    sql: "application/sql",
+    json: "application/json",
+    js: "application/javascript",
+    java: "text/x-java-source",
     // 压缩包
     zip: "application/zip",
     rar: "application/x-rar-compressed",
@@ -617,17 +1193,33 @@ const insertFileElement = (file: File) => {
   updateEditorContent();
 };
 
-// 获取文件图标
+/**
+ * 获取文件大小的可读格式
+ */
+const getReadableFileSize = (bytes: number): string => {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+};
+
+/**
+ * 获取文件类型对应的图标
+ */
 const getFileIcon = (fileType: MessageType): string => {
-  const icons = {
-    IMAGE: "🖼️",
-    VIDEO: "🎥",
-    VOICE: "🎵",
-    FILE: "📄",
-    LINK: "🔗",
+  const iconMap: Record<string, string> = {
+    DOCUMENT: "📄",
+    SPREADSHEET: "📊",
+    PRESENTATION: "📋",
+    PDF: "📕",
+    ARCHIVE: "📦",
+    AUDIO: "🎵",
+    VIDEO: "🎬",
     TEXT: "📝",
+    OTHER: "📎",
   };
-  return icons[fileType] || "📄";
+  return iconMap[fileType] || "📎";
 };
 
 // 插入图片元素到编辑器
@@ -1052,17 +1644,12 @@ nextTick(() => {
 
 <style scoped lang="scss">
 .message-box {
-  position: relative;
-  border: 1px solid var(--el-border-color);
-  border-radius: 8px;
   padding: 12px;
   background: var(--el-bg-color);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-top: 1px solid var(--el-border-color-light);
 }
 
 .editor {
-  min-height: 120px;
-  max-height: 300px;
   overflow-y: auto;
   border: 1px solid var(--el-border-color-light);
   border-radius: 6px;
@@ -1134,6 +1721,181 @@ nextTick(() => {
   max-width: 100%;
   max-height: 70vh;
   border-radius: 4px;
+}
+
+/* 文件确认框样式 */
+.file-confirm-container {
+  .file-list {
+    max-height: 300px;
+    overflow-y: auto;
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      border: 1px solid #e4e7ed;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      background-color: #f8f9fa;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .file-info {
+        display: flex;
+        align-items: center;
+        flex: 1;
+
+        .file-icon {
+          font-size: 24px;
+          margin-right: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+        }
+
+        .file-details {
+          .file-name {
+            font-weight: 500;
+            color: #303133;
+            margin-bottom: 4px;
+            word-break: break-all;
+          }
+
+          .file-size {
+            font-size: 12px;
+            color: #909399;
+          }
+        }
+      }
+    }
+  }
+}
+
+/* 上传进度对话框样式 */
+.upload-progress-content {
+  .overall-progress {
+    margin-bottom: 20px;
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+
+      .progress-title {
+        font-weight: 500;
+        color: #303133;
+      }
+
+      .progress-percent {
+        font-size: 14px;
+        color: #409eff;
+        font-weight: 500;
+      }
+    }
+  }
+
+  .task-list {
+    max-height: 400px;
+    overflow-y: auto;
+
+    .task-item {
+      border: 1px solid #e4e7ed;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      background-color: #f8f9fa;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .task-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+
+        .task-info {
+          display: flex;
+          align-items: center;
+          flex: 1;
+
+          .task-icon {
+            font-size: 24px;
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+          }
+
+          .task-details {
+            .task-name {
+              font-weight: 500;
+              color: #303133;
+              margin-bottom: 4px;
+              word-break: break-all;
+            }
+
+            .task-size {
+              font-size: 12px;
+              color: #909399;
+            }
+          }
+        }
+
+        .task-status {
+          margin-left: 12px;
+        }
+      }
+
+      .task-progress {
+        margin-bottom: 12px;
+
+        .progress-details {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-top: 8px;
+          font-size: 12px;
+          color: #909399;
+
+          .progress-text {
+            flex: 1;
+          }
+
+          .speed-text {
+            margin-left: 12px;
+            color: #67c23a;
+          }
+
+          .time-text {
+            margin-left: 12px;
+            color: #e6a23c;
+          }
+        }
+      }
+
+      .task-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+    }
+  }
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 /* 响应式设计 */
