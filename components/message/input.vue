@@ -84,13 +84,20 @@ const props = withDefaults(
 
 // 定义事件
 const emits = defineEmits<{
-  'message-group-ready': [messageGroup: {
-    id: string;
-    messages: MessageContent[];
-    uploadedFiles: { url: string; key: string; fileName: string }[];
-  }];
-  'upload-progress': [progress: { groupId: string; percent: number; uploadingCount: number }];
-  'upload-error': [error: { groupId: string; message: string; failedFiles: string[] }];
+  "message-group-ready": [
+    messageGroup: {
+      id: string;
+      messages: MessageContent[];
+      uploadedFiles: { url: string; key: string; fileName: string }[];
+    }
+  ];
+  "upload-progress": [
+    progress: { groupId: string; percent: number; uploadingCount: number }
+  ];
+  "upload-error": [
+    error: { groupId: string; message: string; failedFiles: string[] }
+  ];
+  message: [message: MessageContent[]];
 }>();
 
 const editableDiv = ref<HTMLDivElement | null>(null);
@@ -100,7 +107,9 @@ const previewVisible = ref(false);
 const previewImage = ref("");
 
 // 七牛云上传服务
-const qiniuUploadService = ref<ReturnType<typeof createQiniuUploadService> | null>(null);
+const qiniuUploadService = ref<ReturnType<
+  typeof createQiniuUploadService
+> | null>(null);
 
 // 初始化七牛云上传服务
 const initQiniuService = () => {
@@ -108,28 +117,33 @@ const initQiniuService = () => {
     qiniuUploadService.value = createQiniuUploadService(
       async (fileKey: string) => {
         // 获取上传token的函数，需要根据实际情况实现
-        const response = await fetch('http://localhost:8081/oss/qiniu/token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ fileKey }),
-        });
-        
+        const response = await fetch(
+          "http://localhost:8081/oss/qiniu/token?fileKey=" + fileKey,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization:
+                "Bearer " +
+                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJVXzIwMjUwNjI0Mzk2OTA4MTAwIiwiaWF0IjoxNzU3NjgxMTI1LCJleHAiOjE3NTgyODU5MjV9.Afqo8bDiBCO4Bs87FXxoYmo7KAtwqh2W7uY5w5lqXCA",
+            },
+          }
+        );
+
         if (!response.ok) {
-          throw new Error('获取上传token失败');
+          throw new Error("获取上传token失败");
         }
-        
+
         const data = await response.json();
         if (!data.token || !data.key || !data.fname) {
-          throw new Error('token响应格式错误');
+          throw new Error("token响应格式错误");
         }
-        
+
         return data;
       },
       {
-        region: 'z2', // 华南区域
-        domain: 'upload.qiniup.com',
+        region: "z2", // 华南区域
+        domain: "upload.qiniup.com",
       }
     );
   }
@@ -218,14 +232,17 @@ const generateMessageGroupId = (): string => {
 // 计算上传进度
 const calculateUploadProgress = (tasks: UploadTask[]): number => {
   if (tasks.length === 0) return 100;
-  
-  const totalProgress = tasks.reduce((sum, task) => sum + task.progress.percent, 0);
+
+  const totalProgress = tasks.reduce(
+    (sum, task) => sum + task.progress.percent,
+    0
+  );
   return Math.round(totalProgress / tasks.length);
 };
 
 // 检查所有文件是否上传完成
 const areAllFilesUploaded = (tasks: UploadTask[]): boolean => {
-  return tasks.every(task => task.status === 'success');
+  return tasks.every((task) => task.status === "success");
 };
 
 // 清理事件监听器
@@ -290,6 +307,10 @@ const handleDragLeave = (e: DragEvent) => {
   }
 };
 
+/**
+ * 处理文件拖拽释放事件
+ * @param e 拖拽事件对象
+ */
 const handleDrop = (e: DragEvent) => {
   e.preventDefault();
   isDragOver.value = false;
@@ -681,7 +702,6 @@ const insertImageElement = (file: File) => {
   };
 
   reader.readAsDataURL(file);
-  ElMessage.success("图片上传成功");
 };
 
 /**
@@ -743,14 +763,19 @@ const handleSend = async () => {
   };
 
   // 从blob URL获取File对象
-  const getFileFromBlobUrl = async (blobUrl: string, node: Node): Promise<File | null> => {
+  const getFileFromBlobUrl = async (
+    blobUrl: string,
+    node: Node
+  ): Promise<File | null> => {
     try {
       if (node.nodeName === "IMG") {
         // 对于图片，从img元素获取文件信息
         const img = node as HTMLImageElement;
         const response = await fetch(blobUrl);
         const blob = await response.blob();
-        const fileName = `image_${Date.now()}.${blob.type.split('/')[1] || 'png'}`;
+        const fileName = `image_${Date.now()}.${
+          blob.type.split("/")[1] || "png"
+        }`;
         return new File([blob], fileName, { type: blob.type });
       } else if (node.nodeName === "DIV" && (node as any).fileData) {
         // 对于文件元素，从fileData获取信息
@@ -760,7 +785,7 @@ const handleSend = async () => {
         return new File([blob], fileData.name, { type: blob.type });
       }
     } catch (error) {
-      console.error('获取文件失败:', error);
+      console.error("获取文件失败:", error);
     }
     return null;
   };
@@ -780,14 +805,14 @@ const handleSend = async () => {
 
       const imgSrc = (node as HTMLImageElement).src;
       const messageIndex = messages.length;
-      
+
       // 如果是blob URL，需要上传
-      if (imgSrc.startsWith('blob:')) {
+      if (imgSrc.startsWith("blob:")) {
         const file = await getFileFromBlobUrl(imgSrc, node);
         if (file) {
           filesToUpload.push({ file, messageIndex, node });
         }
-        
+
         messages.push({
           type: "IMAGE",
           tempId: Date.now() + Math.random(),
@@ -815,14 +840,14 @@ const handleSend = async () => {
 
       const fileData = (node as any).fileData;
       const messageIndex = messages.length;
-      
+
       // 如果是blob URL，需要上传
-      if (fileData.url.startsWith('blob:')) {
+      if (fileData.url.startsWith("blob:")) {
         const file = await getFileFromBlobUrl(fileData.url, node);
         if (file) {
           filesToUpload.push({ file, messageIndex, node });
         }
-        
+
         messages.push({
           type: fileData.type,
           tempId: Date.now() + Math.random(),
@@ -901,6 +926,7 @@ const handleSend = async () => {
     });
   }
 
+  emits("message", messages);
   // 创建消息组
   const groupId = generateMessageGroupId();
   messageGroup.value = {
@@ -917,7 +943,7 @@ const handleSend = async () => {
 
   // 如果没有文件需要上传，直接触发消息准备完毕事件
   if (filesToUpload.length === 0) {
-    emits('message-group-ready', {
+    emits("message-group-ready", {
       id: groupId,
       messages,
       uploadedFiles: [],
@@ -926,9 +952,6 @@ const handleSend = async () => {
     return;
   }
 
-  // 开始上传文件
-  ElMessage.info(`开始上传 ${filesToUpload.length} 个文件...`);
-  
   const uploadTasks: UploadTask[] = [];
   const uploadedFiles: { url: string; key: string; fileName: string }[] = [];
   let completedCount = 0;
@@ -945,78 +968,77 @@ const handleSend = async () => {
           // 更新上传进度
           const totalProgress = calculateUploadProgress(uploadTasks);
           messageGroup.value!.uploadProgress = totalProgress;
-          
-          emits('upload-progress', {
+
+          emits("upload-progress", {
             groupId,
             percent: totalProgress,
-            uploadingCount: uploadTasks.filter(t => t.status === 'uploading').length,
+            uploadingCount: uploadTasks.filter((t) => t.status === "uploading")
+              .length,
           });
         },
         (status) => {
-          if (status === 'success') {
+          if (status === "success") {
             completedCount++;
-            
+
             // 更新消息中的URL
             if (task.url) {
               messages[messageIndex].url = task.url;
-              messages[messageIndex].content = messages[messageIndex].type === 'IMAGE' 
-                ? task.url 
-                : file.name;
-              
+              messages[messageIndex].content =
+                messages[messageIndex].type === "IMAGE" ? task.url : file.name;
+
               if (messages[messageIndex].payload) {
                 messages[messageIndex].payload!.url = task.url;
                 messages[messageIndex].payload!.key = task.key;
               }
-              
+
               uploadedFiles.push({
                 url: task.url,
                 key: task.key,
                 fileName: file.name,
               });
             }
-            
+
             // 检查是否所有文件都上传完成
             if (completedCount === filesToUpload.length && !hasError) {
               messageGroup.value!.isUploading = false;
               messageGroup.value!.uploadProgress = 100;
-              
-              emits('message-group-ready', {
+
+              emits("message-group-ready", {
                 id: groupId,
                 messages,
                 uploadedFiles,
               });
-              
+
               ElMessage.success(`所有文件上传完成，消息准备完毕`);
             }
-          } else if (status === 'error') {
+          } else if (status === "error") {
             hasError = true;
             failedFiles.push(file.name);
-            
-            emits('upload-error', {
+
+            emits("upload-error", {
               groupId,
               message: `文件 ${file.name} 上传失败`,
               failedFiles,
             });
-            
+
             ElMessage.error(`文件 ${file.name} 上传失败`);
           }
         }
       );
-      
+
       uploadTasks.push(task);
       messageGroup.value!.uploadTasks = uploadTasks;
-      
     } catch (error) {
       hasError = true;
       failedFiles.push(file.name);
       console.error(`文件 ${file.name} 上传失败:`, error);
-      
-      emits('upload-error', {
+
+      emits("upload-error", {
         groupId,
         message: `文件 ${file.name} 上传失败: ${error}`,
         failedFiles,
       });
-      
+
       ElMessage.error(`文件 ${file.name} 上传失败`);
     }
   }
