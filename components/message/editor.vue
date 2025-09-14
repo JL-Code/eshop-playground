@@ -485,24 +485,93 @@ onUnmounted(() => {
  * 处理粘贴事件
  * @param e 粘贴事件对象
  */
+/**
+ * 处理文件列表的公共方法
+ * @param files 文件列表
+ */
+const processFiles = (files: FileList | File[]) => {
+  const fileArray = Array.from(files);
+  
+  if (fileArray.length === 0) return;
+
+  // 检查文件数量限制
+  if (!canAddMoreFiles(fileArray.length)) {
+    const currentCount = getCurrentFileCount();
+    const remaining = props.maxFiles - currentCount;
+    ElMessage.error(
+      `最多只能添加 ${props.maxFiles} 个文件，当前已有 ${currentCount} 个，还可添加 ${remaining} 个`
+    );
+    return;
+  }
+
+  const imageFiles: File[] = [];
+  const nonImageFiles: File[] = [];
+  const unsupportedFiles: string[] = [];
+
+  // 分类文件
+  for (const file of fileArray) {
+    if (!fileUtil.isSupportedFile(file)) {
+      unsupportedFiles.push(file.name);
+      continue;
+    }
+
+    // 验证文件大小
+    const fileType = fileUtil.getFileType(file);
+    const maxSize = ["IMAGE", "VIDEO", "VOICE"].includes(fileType) ? 20 : 50;
+    if (file.size / 1024 / 1024 > maxSize) {
+      ElMessage.error(`文件 ${file.name} 大小不能超过 ${maxSize}MB!`);
+      continue;
+    }
+
+    if (fileType === "IMAGE") {
+      imageFiles.push(file);
+    } else {
+      nonImageFiles.push(file);
+    }
+  }
+
+  // 显示不支持的文件错误
+  if (unsupportedFiles.length > 0) {
+    ElMessage.error(`不支持的文件类型: ${unsupportedFiles.join(", ")}`);
+  }
+
+  // 处理图片文件 - 直接插入到输入框
+  imageFiles.forEach((file) => {
+    insertImageElement(file);
+  });
+
+  // 处理非图片文件 - 显示在确认框中
+  if (nonImageFiles.length > 0) {
+    pendingFiles.value = [...pendingFiles.value, ...nonImageFiles];
+    fileConfirmVisible.value = true;
+  }
+};
+
 const handlePaste = (e: ClipboardEvent) => {
   const items = e.clipboardData?.items;
 
   if (items) {
-    // 检查是否有图片
+    const files: File[] = [];
+    
+    // 收集所有文件（不仅仅是图片）
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      if (item.type.indexOf("image") !== -1) {
+      if (item.kind === "file") {
         const file = item.getAsFile();
         if (file) {
-          insertFile(file);
-          return;
+          files.push(file);
         }
       }
     }
+    
+    // 如果有文件，使用统一的处理方法
+    if (files.length > 0) {
+      processFiles(files);
+      return;
+    }
   }
 
-  // 如果没有图片，处理文本粘贴
+  // 如果没有文件，处理文本粘贴
   const text = e.clipboardData?.getData("text/plain");
   if (text) {
     document.execCommand("insertText", false, text);
@@ -561,52 +630,7 @@ const handleDrop = (e: DragEvent) => {
 
   const files = e.dataTransfer?.files;
   if (files && files.length > 0) {
-    // 检查文件数量限制
-    if (!canAddMoreFiles(files.length)) {
-      const currentCount = getCurrentFileCount();
-      const remaining = props.maxFiles - currentCount;
-      ElMessage.error(
-        `最多只能添加 ${props.maxFiles} 个文件，当前已有 ${currentCount} 个，还可添加 ${remaining} 个`
-      );
-      return;
-    }
-
-    const imageFiles: File[] = [];
-    const nonImageFiles: File[] = [];
-    const unsupportedFiles: string[] = [];
-
-    // 分类文件
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-
-      if (!fileUtil.isSupportedFile(file)) {
-        unsupportedFiles.push(file.name);
-        continue;
-      }
-
-      const fileType = fileUtil.getFileType(file);
-      if (fileType === "IMAGE") {
-        imageFiles.push(file);
-      } else {
-        nonImageFiles.push(file);
-      }
-    }
-
-    // 显示不支持的文件错误
-    if (unsupportedFiles.length > 0) {
-      ElMessage.error(`不支持的文件类型: ${unsupportedFiles.join(", ")}`);
-    }
-
-    // 处理图片文件 - 直接插入到输入框
-    imageFiles.forEach((file) => {
-      insertImageElement(file);
-    });
-
-    // 处理非图片文件 - 显示在确认框中
-    if (nonImageFiles.length > 0) {
-      pendingFiles.value = [...pendingFiles.value, ...nonImageFiles];
-      fileConfirmVisible.value = true;
-    }
+    processFiles(files);
   }
 };
 
@@ -968,57 +992,11 @@ const beforeUpload = (file: File) => {
 // 处理文件上传
 const handleFileUpload = (file: UploadFile) => {
   if (file.raw) {
-    // 检查文件数量限制
-    if (!canAddMoreFiles(1)) {
-      const currentCount = getCurrentFileCount();
-      const remaining = props.maxFiles - currentCount;
-      ElMessage.error(
-        `最多只能添加 ${props.maxFiles} 个文件，当前已有 ${currentCount} 个，还可添加 ${remaining} 个`
-      );
-      return;
-    }
-    insertFile(file.raw);
+    processFiles([file.raw]);
   }
 };
 
-/**
- * 统一的文件插入函数
- * @param file 要插入的文件对象
- */
-const insertFile = (file: File) => {
-  if (!editableDiv.value) return;
 
-  // 检查文件数量限制（单个文件插入时的额外检查）
-  if (!canAddMoreFiles(1)) {
-    const currentCount = getCurrentFileCount();
-    const remaining = props.maxFiles - currentCount;
-    ElMessage.error(
-      `最多只能添加 ${props.maxFiles} 个文件，当前已有 ${currentCount} 个，还可添加 ${remaining} 个`
-    );
-    return;
-  }
-
-  // 验证文件类型和大小
-  if (!fileUtil.isSupportedFile(file)) {
-    ElMessage.error("不支持的文件类型!");
-    return;
-  }
-
-  const fileType = fileUtil.getFileType(file);
-  // 图片、视频、音频文件限制20MB，其他文档类文件限制50MB
-  const maxSize = ["IMAGE", "VIDEO", "VOICE"].includes(fileType) ? 20 : 50;
-
-  if (file.size / 1024 / 1024 > maxSize) {
-    ElMessage.error(`文件大小不能超过 ${maxSize}MB!`);
-    return;
-  }
-
-  if (fileType === "IMAGE") {
-    insertImageElement(file);
-  } else {
-    insertFileElement(file);
-  }
-};
 
 // 插入文件元素到编辑器
 const insertFileElement = (file: File) => {
