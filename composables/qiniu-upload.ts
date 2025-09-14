@@ -39,6 +39,10 @@ export interface UploadTask {
 export interface QiniuConfig {
   region?: "z0" | "z1" | "z2" | "na0" | "as0" | "cn-east-2";
   domain?: string;
+  /**
+   * 七牛云 CDN 域名，用于创建对象外链
+   */
+  cdnDomain: string;
   useCdnDomain?: boolean;
   forceDirect?: boolean;
   retryCount?: number;
@@ -65,7 +69,7 @@ export class QiniuUploadService {
 
   constructor(
     tokenProvider: (fileKey: string, keep?: boolean) => Promise<TokenResponse>,
-    config: QiniuConfig = {}
+    config: QiniuConfig = { cdnDomain: "" }
   ) {
     this.tokenProvider = tokenProvider;
     this.config = {
@@ -221,7 +225,10 @@ export class QiniuUploadService {
         },
         complete: (res: any) => {
           task.status = UploadStatus.SUCCESS;
-          task.url = res.key ? `${this.config.domain}/${res.key}` : undefined;
+          // 上传后返回的 cdn 访问地址
+          task.url = res.key
+            ? `${this.config.cdnDomain}/${res.key}`
+            : undefined;
           onStatusChange?.(task.status);
         },
       });

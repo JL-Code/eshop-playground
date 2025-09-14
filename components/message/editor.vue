@@ -372,6 +372,8 @@ const initQiniuService = () => {
       {
         region: "z2", // 华南区域
         domain: "upload.qiniup.com",
+        // http://cdn.6014.cn/202509/14/U_20250624396908100/20250914_220230_657_02bceab799687030.png
+        cdnDomain: "http://cdn.6014.cn",
       }
     );
   }
@@ -491,7 +493,7 @@ onUnmounted(() => {
  */
 const processFiles = (files: FileList | File[]) => {
   const fileArray = Array.from(files);
-  
+
   if (fileArray.length === 0) return;
 
   // 检查文件数量限制
@@ -552,7 +554,7 @@ const handlePaste = (e: ClipboardEvent) => {
 
   if (items) {
     const files: File[] = [];
-    
+
     // 收集所有文件（不仅仅是图片）
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -563,7 +565,7 @@ const handlePaste = (e: ClipboardEvent) => {
         }
       }
     }
-    
+
     // 如果有文件，使用统一的处理方法
     if (files.length > 0) {
       processFiles(files);
@@ -996,8 +998,6 @@ const handleFileUpload = (file: UploadFile) => {
   }
 };
 
-
-
 // 插入文件元素到编辑器
 const insertFileElement = (file: File) => {
   const fileType = fileUtil.getFileType(file);
@@ -1205,25 +1205,35 @@ const handleSend = async () => {
     return "FILE";
   };
 
-  // 从blob URL获取File对象
-  const getFileFromBlobUrl = async (
-    blobUrl: string,
+  // 从blob URL或data URL获取File对象
+  const getFileFromUrl = async (
+    url: string,
     node: Node
   ): Promise<File | null> => {
     try {
       if (node.nodeName === "IMG") {
         // 对于图片，从img元素获取文件信息
         const img = node as HTMLImageElement;
-        const response = await fetch(blobUrl);
-        const blob = await response.blob();
-        const fileName = `image_${Date.now()}.${
-          blob.type.split("/")[1] || "png"
-        }`;
+        let blob: Blob;
+        let fileName: string;
+
+        if (url.startsWith("data:")) {
+          // 处理data URL (base64)
+          const response = await fetch(url);
+          blob = await response.blob();
+          fileName = `image_${Date.now()}.${blob.type.split("/")[1] || "png"}`;
+        } else {
+          // 处理blob URL
+          const response = await fetch(url);
+          blob = await response.blob();
+          fileName = `image_${Date.now()}.${blob.type.split("/")[1] || "png"}`;
+        }
+
         return new File([blob], fileName, { type: blob.type });
       } else if (node.nodeName === "DIV" && (node as any).fileData) {
         // 对于文件元素，从fileData获取信息
         const fileData = (node as any).fileData;
-        const response = await fetch(blobUrl);
+        const response = await fetch(url);
         const blob = await response.blob();
         return new File([blob], fileData.name, { type: blob.type });
       }
@@ -1249,9 +1259,9 @@ const handleSend = async () => {
       const imgSrc = (node as HTMLImageElement).src;
       const messageIndex = messages.length;
 
-      // 如果是blob URL，需要上传
-      if (imgSrc.startsWith("blob:")) {
-        const file = await getFileFromBlobUrl(imgSrc, node);
+      // 如果是blob URL或data URL，需要上传
+      if (imgSrc.startsWith("blob:") || imgSrc.startsWith("data:")) {
+        const file = await getFileFromUrl(imgSrc, node);
         if (file) {
           filesToUpload.push({ file, messageIndex, node });
         }
@@ -1286,7 +1296,7 @@ const handleSend = async () => {
 
       // 如果是blob URL，需要上传
       if (fileData.url.startsWith("blob:")) {
-        const file = await getFileFromBlobUrl(fileData.url, node);
+        const file = await getFileFromUrl(fileData.url, node);
         if (file) {
           filesToUpload.push({ file, messageIndex, node });
         }
