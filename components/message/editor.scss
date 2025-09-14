@@ -1,0 +1,261 @@
+.editor-box {
+  position: relative;
+  padding: 12px;
+  background: var(--el-bg-color);
+  border-top: 1px solid var(--el-border-color-light);
+}
+
+.editor {
+  position: relative;
+  overflow-y: auto;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 12px;
+  background: var(--el-bg-color-page);
+  transition: all 0.3s ease;
+  min-height: 120px;
+}
+
+.editor:focus {
+  outline: none;
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 0 2px var(--el-color-primary-light-9);
+}
+
+.editor.drag-over {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border-style: dashed;
+}
+
+.editor:empty:before {
+  content: attr(placeholder);
+  color: var(--el-text-color-placeholder);
+  pointer-events: none;
+}
+
+.drag-overlay {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  bottom: 52px;
+  background: rgba(64, 158, 255, 0.1);
+  border: 2px dashed var(--el-color-primary);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.drag-icon {
+  font-size: 32px;
+  color: var(--el-color-primary);
+  margin-bottom: 8px;
+}
+
+.drag-overlay p {
+  color: var(--el-color-primary);
+  font-size: 14px;
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* 文件确认框样式 */
+.file-confirm-container {
+  .file-list {
+    max-height: 300px;
+    overflow-y: auto;
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      border: 1px solid #e4e7ed;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      background-color: #f8f9fa;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .file-info {
+        display: flex;
+        align-items: center;
+        flex: 1;
+
+        .file-icon {
+          font-size: 24px;
+          margin-right: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+        }
+
+        .file-details {
+          .file-name {
+            font-weight: 500;
+            color: #303133;
+            margin-bottom: 4px;
+            word-break: break-all;
+          }
+
+          .file-size {
+            font-size: 12px;
+            color: #909399;
+          }
+        }
+      }
+    }
+  }
+}
+
+/* 上传进度对话框样式 */
+.upload-progress-content {
+  .overall-progress {
+    margin-bottom: 20px;
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+
+      .progress-title {
+        font-weight: 500;
+        color: #303133;
+      }
+
+      .progress-percent {
+        font-size: 14px;
+        color: #409eff;
+        font-weight: 500;
+      }
+    }
+  }
+
+  .task-list {
+    max-height: 400px;
+    overflow-y: auto;
+
+    .task-item {
+      border: 1px solid #e4e7ed;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      background-color: #f8f9fa;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .task-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+
+        .task-info {
+          display: flex;
+          align-items: center;
+          flex: 1;
+
+          .task-icon {
+            font-size: 24px;
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+          }
+
+          .task-details {
+            .task-name {
+              font-weight: 500;
+              color: #303133;
+              margin-bottom: 4px;
+              word-break: break-all;
+            }
+
+            .task-size {
+              font-size: 12px;
+              color: #909399;
+            }
+          }
+        }
+
+        .task-status {
+          margin-left: 12px;
+        }
+      }
+
+      .task-progress {
+        margin-bottom: 12px;
+
+        .progress-details {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-top: 8px;
+          font-size: 12px;
+          color: #909399;
+
+          .progress-text {
+            flex: 1;
+          }
+
+          .speed-text {
+            margin-left: 12px;
+            color: #67c23a;
+          }
+
+          .time-text {
+            margin-left: 12px;
+            color: #e6a23c;
+          }
+        }
+      }
+
+      .task-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+    }
+  }
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .message-box {
+    padding: 8px;
+  }
+
+  .editor {
+    min-height: 80px;
+  }
+
+  .actions {
+    justify-content: center;
+  }
+}
