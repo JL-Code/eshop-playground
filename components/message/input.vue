@@ -1658,6 +1658,7 @@ nextTick(() => {
   background: var(--el-bg-color-page);
   transition: all 0.3s ease;
   position: relative;
+  min-height: 120px;
 }
 
 .editor:focus {
