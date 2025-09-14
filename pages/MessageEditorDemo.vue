@@ -1,5 +1,5 @@
 <template>
-  <div class="message-demo-card" v-loading="loading">
+  <div class="h-full flex flex-col">
     <div class="message-header">
       <span>消息列表</span>
       <el-button-group>
@@ -7,7 +7,7 @@
         <el-button :icon="Bottom" circle @click="scrollToBottom" />
       </el-button-group>
     </div>
-    <div class="message-content">
+    <div class="flex-1 overflow-auto" v-loading="loading">
       <el-scrollbar ref="scrollbarRef" @scroll="handleScroll">
         <div v-if="hasMore" class="load-more">
           <el-button link @click="loadMore">加载更多</el-button>
@@ -44,26 +44,22 @@
 </template>
 <script setup lang="ts">
 import { Bottom, Refresh, ChatLineRound } from "@element-plus/icons-vue";
-import { ElMessage, ElScrollbar } from "element-plus";
 import type { ScrollbarInstance } from "element-plus";
-import { nextTick } from "vue";
 
 const loading = ref(false);
 const hasMore = ref(true);
 const scrollbarRef = ref<ScrollbarInstance>();
-const messageListRef = ref<HTMLElement>();
 const autoScroll = ref(true);
 
 const toNickname = ref("接收方昵称");
-
 const messageList = ref<MessageContent[]>([]);
 
 const handleMessage = async (message: MessageContent[]) => {
-  console.log("handleMessage", message);
+  console.log("handleMessage", JSON.stringify(message));
   loading.value = true;
 
   try {
-    // 模拟消息发送延迟
+    // 模拟消息发送延迟 TODO: 对接发送消息到服务器 API
     await new Promise((resolve) => setTimeout(resolve, 500));
     messageList.value.push(...message);
     await nextTick();
@@ -168,50 +164,35 @@ const handleCancelUpload = (tempId: number) => {
 };
 </script>
 <style lang="scss" scoped>
-.message-demo-card {
-  height: 100%;
+.message-header {
+  height: 70px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--el-border-color-light);
+  background-color: var(--el-bg-color);
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+}
+.message-input {
+  height: 230px;
+}
 
-  .message-header {
-    height: 70px;
-    padding: 12px 20px;
-    border-bottom: 1px solid var(--el-border-color-light);
-    background-color: var(--el-bg-color);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  /**
-  content 必须加 min-height: 0;（或者 overflow: hidden;）——这是 Flex 布局下避免子元素“撑破”容器的常见坑。
-  <el-scrollbar> 默认会自动撑满父容器，所以只要父容器 .content 正确限制高度，就会生效。
-   */
-  .message-content {
-    flex: 1;
-    overflow: auto;
-  }
+.message-items {
+  .message-item {
+    padding: 16px 0;
+    transition: background-color 0.2s ease;
 
-  .message-input {
-    height: 230px;
-  }
-
-  .message-items {
-    .message-item {
-      padding: 16px 0;
-      transition: background-color 0.2s ease;
-
-      &:not(:last-child) {
-        border-bottom: 1px solid var(--el-border-color-lighter);
-      }
+    &:not(:last-child) {
+      border-bottom: 1px solid var(--el-border-color-lighter);
     }
   }
+}
 
-  .load-more {
-    text-align: center;
-    padding: 10px 0;
-  }
-  .message-list {
-    padding: 20px;
-  }
+.load-more {
+  text-align: center;
+  padding: 10px 0;
+}
+.message-list {
+  padding: 20px;
 }
 </style>

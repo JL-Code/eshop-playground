@@ -113,7 +113,7 @@
       </template>
     </el-dialog>
 
-    <!-- 文件上传进度显示 -->
+    <!-- 文件上传进度显示 TODO: 进度完成后弹窗自动关闭 -->
     <el-dialog
       v-model="showUploadProgress"
       title="文件上传进度"
@@ -258,12 +258,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * TODO: 消息编辑器
- * [ ] 文件拖入上传发送[支持多选]
- * [ ] 文件粘贴上传发送[支持多选]
- */
-
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
   Upload,
@@ -673,6 +667,7 @@ const confirmSendFiles = async () => {
   });
 
   // 发送消息事件
+  // FIXME: 需要在所有文件上传完成后再发送 message 事件
   emits("message", messages);
 
   // 创建消息组
