@@ -113,7 +113,7 @@
       </template>
     </el-dialog>
 
-    <!-- 文件上传进度显示 TODO: 进度完成后弹窗自动关闭 -->
+    <!-- 文件上传进度显示 -->
     <el-dialog
       v-model="showUploadProgress"
       title="文件上传进度"
@@ -229,13 +229,23 @@
 
       <template #footer>
         <div class="dialog-footer">
-          <el-button
+          <div
             v-if="messageGroup && !messageGroup.isUploading"
-            type="primary"
-            @click="closeUploadProgress"
+            class="countdown-close-container"
           >
-            完成
-          </el-button>
+            <el-countdown
+              :value="Date.now() + 2500"
+              format="s 秒后自动关闭"
+              @finish="closeUploadProgress"
+            />
+            <el-button
+              type="primary"
+              @click="closeUploadProgress"
+              style="margin-left: 12px"
+            >
+              立即关闭
+            </el-button>
+          </div>
           <template v-if="trial">
             <el-button
               v-if="messageGroup && messageGroup.isUploading"
@@ -739,8 +749,6 @@ const confirmSendFiles = async () => {
                 messages,
                 uploadedFiles,
               });
-
-              ElMessage.success(`所有文件上传完成，消息准备完毕`);
             }
           } else if (status === "error") {
             hasError = true;
@@ -879,6 +887,7 @@ const resumeAllTasks = async () => {
 };
 
 const closeUploadProgress = () => {
+  console.log("closeUploadProgress");
   showUploadProgress.value = false;
   messageGroup.value = null;
 };
@@ -1406,6 +1415,10 @@ const handleSend = async () => {
   let hasError = false;
   const failedFiles: string[] = [];
 
+  // 显示上传进度对话框
+  showUploadProgress.value = true;
+  ElMessage.success(`开始上传 ${filesToUpload.length} 个文件`);
+
   // 上传每个文件
   for (const { file, messageIndex } of filesToUpload) {
     try {
@@ -1456,8 +1469,6 @@ const handleSend = async () => {
                 messages,
                 uploadedFiles,
               });
-
-              ElMessage.success(`所有文件上传完成，消息准备完毕`);
             }
           } else if (status === "error") {
             hasError = true;

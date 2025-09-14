@@ -245,6 +245,18 @@
   gap: 12px;
 }
 
+.countdown-close-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  
+  .el-countdown {
+    font-size: 14px;
+    color: var(--el-text-color-regular);
+  }
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .message-box {
