@@ -38,7 +38,11 @@
       </el-scrollbar>
     </div>
     <div class="message-input">
-      <MessageEditor @message="handleMessage" :to-nickname="toNickname" />
+      <MessageEditor
+        @message="handleMessage"
+        @message-group-ready="handleMessageGroupReady"
+        :to-nickname="toNickname"
+      />
     </div>
   </div>
 </template>
@@ -54,23 +58,22 @@ const autoScroll = ref(true);
 const toNickname = ref("接收方昵称");
 const messageList = ref<MessageContent[]>([]);
 
-const handleMessage = async (message: MessageContent[]) => {
-  console.log("handleMessage", JSON.stringify(message));
-  loading.value = true;
+const handleMessageGroupReady = () => {
+  console.log("handleMessageGroupReady 消息准备完成对接服务器 API");
+  // TODO: 对接发送消息到服务器 API
+  loading.value = false;
+};
 
-  try {
-    // 模拟消息发送延迟 TODO: 对接发送消息到服务器 API
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    messageList.value.push(...message);
-    await nextTick();
-    if (autoScroll.value) {
-      scrollToBottom();
-    }
-    ElMessage.success("消息发送成功");
-  } catch (error) {
-    ElMessage.error("消息发送失败，请重试");
-  } finally {
-    loading.value = false;
+const handleMessage = async (message: MessageContent[]) => {
+  loading.value = true;
+  console.log("handleMessage 乐观更新 UI", JSON.parse(JSON.stringify(message)));
+
+  // 乐观更新 UI
+  messageList.value.push(...message);
+
+  await nextTick();
+  if (autoScroll.value) {
+    scrollToBottom();
   }
 };
 

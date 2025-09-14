@@ -181,7 +181,7 @@ export class QiniuUploadService {
 
       const subscription = observable.subscribe({
         next: (res: any) => {
-          console.log("qiniu subscription", JSON.stringify(res));
+          console.debug("qiniu subscription", JSON.stringify(res));
           /**
            * 七牛云返回的进度数据结构:
            * {
