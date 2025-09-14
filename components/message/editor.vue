@@ -481,7 +481,10 @@ onUnmounted(() => {
   }
 });
 
-// 处理粘贴事件
+/**
+ * 处理粘贴事件
+ * @param e 粘贴事件对象
+ */
 const handlePaste = (e: ClipboardEvent) => {
   const items = e.clipboardData?.items;
 
@@ -978,7 +981,10 @@ const handleFileUpload = (file: UploadFile) => {
   }
 };
 
-// 统一的文件插入函数
+/**
+ * 统一的文件插入函数
+ * @param file 要插入的文件对象
+ */
 const insertFile = (file: File) => {
   if (!editableDiv.value) return;
 
