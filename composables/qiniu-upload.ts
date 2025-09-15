@@ -51,24 +51,16 @@ export interface QiniuConfig {
   checkByMD5?: boolean;
 }
 
-// 上传服务类
-// Token响应接口
-export interface TokenResponse {
-  token: string;
-  key: string;
-  fname: string;
-}
-
 export class QiniuUploadService {
   private tasks = new Map<string, UploadTask>();
   private config: QiniuConfig;
   private tokenProvider: (
     fileKey: string,
     keep?: boolean
-  ) => Promise<TokenResponse>;
+  ) => Promise<QiniuUploadTokenRes>;
 
   constructor(
-    tokenProvider: (fileKey: string, keep?: boolean) => Promise<TokenResponse>,
+    tokenProvider: (fileKey: string, keep?: boolean) => Promise<QiniuUploadTokenRes>,
     config: QiniuConfig = { cdnDomain: "" }
   ) {
     this.tokenProvider = tokenProvider;
@@ -97,7 +89,12 @@ export class QiniuUploadService {
     return `uploads/${timestamp}_${randomStr}.${extension}`;
   }
 
-  // 计算上传速度和剩余时间
+  /**
+   * 计算上传速度和剩余时间
+   * @param task 上传任务
+   * @param currentLoaded 当前已上传字节数
+   * @returns 
+   */
   private calculateSpeed(
     task: UploadTask,
     currentLoaded: number
@@ -113,7 +110,14 @@ export class QiniuUploadService {
     return { speed, remainingTime };
   }
 
-  // 开始上传
+  /**
+   * 上传文件
+   * @param file 上传文件
+   * @param key 自定义文件key
+   * @param onProgress 上传进度回调
+   * @param onStatusChange 上传状态回调
+   * @returns 上传任务
+   */
   async upload(
     file: File,
     key?: string,
@@ -430,7 +434,7 @@ export class QiniuUploadService {
 
 // 创建默认的上传服务实例
 export function createQiniuUploadService(
-  tokenProvider: (fileKey: string) => Promise<TokenResponse>,
+  tokenProvider: (fileKey: string) => Promise<QiniuUploadTokenRes>,
   config?: QiniuConfig
 ) {
   return new QiniuUploadService(tokenProvider, config);

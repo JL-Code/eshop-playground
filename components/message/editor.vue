@@ -269,17 +269,12 @@
 
 <script setup lang="ts">
 import { ElMessage, ElMessageBox } from "element-plus";
-import {
-  Upload,
-  Picture,
-  Position,
-  Folder,
-  Delete,
-} from "@element-plus/icons-vue";
+import { Upload, Position, Folder, Delete } from "@element-plus/icons-vue";
 import type { UploadFile } from "element-plus";
 import { createQiniuUploadService } from "~/composables/qiniu-upload";
 import type { UploadTask } from "~/composables/qiniu-upload";
 import fileUtil from "~/components/message/utils/file";
+import useOss from "~/composables/oss";
 
 const props = withDefaults(
   defineProps<{
@@ -324,7 +319,7 @@ const emits = defineEmits<{
   ];
   message: [message: MessageContent[]];
 }>();
-
+const oss = useOss();
 const editableDiv = ref<HTMLDivElement | null>(null);
 const uploadRef = ref();
 const isDragOver = ref(false);
@@ -346,40 +341,12 @@ const qiniuUploadService = ref<ReturnType<
 // 初始化七牛云上传服务
 const initQiniuService = () => {
   if (!qiniuUploadService.value) {
-    qiniuUploadService.value = createQiniuUploadService(
-      async (fileKey: string) => {
-        // 获取上传token的函数，需要根据实际情况实现
-        const response = await fetch(
-          "http://localhost:8081/oss/qiniu/token?fileKey=" + fileKey,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization:
-                "Bearer " +
-                "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJVXzIwMjUwNjI0Mzk2OTA4MTAwIiwiaWF0IjoxNzU3NjgxMTI1LCJleHAiOjE3NTgyODU5MjV9.Afqo8bDiBCO4Bs87FXxoYmo7KAtwqh2W7uY5w5lqXCA",
-            },
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error("获取上传token失败");
-        }
-
-        const data = await response.json();
-        if (!data.token || !data.key || !data.fname) {
-          throw new Error("token响应格式错误");
-        }
-
-        return data;
-      },
-      {
-        region: "z2", // 华南区域
-        domain: "upload.qiniup.com",
-        // http://cdn.6014.cn/202509/14/U_20250624396908100/20250914_220230_657_02bceab799687030.png
-        cdnDomain: "http://cdn.6014.cn",
-      }
-    );
+    qiniuUploadService.value = createQiniuUploadService(oss.getUploadToken, {
+      region: "z2", // 华南区域
+      domain: "upload.qiniup.com",
+      // http://cdn.6014.cn/202509/14/U_20250624396908100/20250914_220230_657_02bceab799687030.png
+      cdnDomain: "http://cdn.6014.cn",
+    });
   }
 };
 
@@ -1170,83 +1137,6 @@ const handleSend = async () => {
   const filesToUpload: { file: File; messageIndex: number; node: Node }[] = [];
   let buffer = "";
 
-  // 辅助函数：根据文件扩展名或MIME类型判断消息类型
-  const getMessageTypeFromUrl = (url: string): MessageType => {
-    const imageExtensions = [
-      ".jpg",
-      ".jpeg",
-      ".png",
-      ".gif",
-      ".bmp",
-      ".webp",
-      ".svg",
-    ];
-    const videoExtensions = [
-      ".mp4",
-      ".avi",
-      ".mov",
-      ".wmv",
-      ".flv",
-      ".webm",
-      ".mkv",
-    ];
-    const audioExtensions = [".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a"];
-
-    const lowerUrl = url.toLowerCase();
-
-    if (imageExtensions.some((ext) => lowerUrl.includes(ext))) {
-      return "IMAGE";
-    }
-    if (videoExtensions.some((ext) => lowerUrl.includes(ext))) {
-      return "VIDEO";
-    }
-    if (audioExtensions.some((ext) => lowerUrl.includes(ext))) {
-      return "VOICE";
-    }
-    if (lowerUrl.startsWith("http") || lowerUrl.startsWith("https")) {
-      return "LINK";
-    }
-    return "FILE";
-  };
-
-  // 从blob URL或data URL获取File对象
-  const getFileFromUrl = async (
-    url: string,
-    node: Node
-  ): Promise<File | null> => {
-    try {
-      if (node.nodeName === "IMG") {
-        // 对于图片，从img元素获取文件信息
-        const img = node as HTMLImageElement;
-        let blob: Blob;
-        let fileName: string;
-
-        if (url.startsWith("data:")) {
-          // 处理data URL (base64)
-          const response = await fetch(url);
-          blob = await response.blob();
-          fileName = `image_${Date.now()}.${blob.type.split("/")[1] || "png"}`;
-        } else {
-          // 处理blob URL
-          const response = await fetch(url);
-          blob = await response.blob();
-          fileName = `image_${Date.now()}.${blob.type.split("/")[1] || "png"}`;
-        }
-
-        return new File([blob], fileName, { type: blob.type });
-      } else if (node.nodeName === "DIV" && (node as any).fileData) {
-        // 对于文件元素，从fileData获取信息
-        const fileData = (node as any).fileData;
-        const response = await fetch(url);
-        const blob = await response.blob();
-        return new File([blob], fileData.name, { type: blob.type });
-      }
-    } catch (error) {
-      console.error("获取文件失败:", error);
-    }
-    return null;
-  };
-
   // 解析消息内容
   for (const node of nodes) {
     if (node.nodeName === "IMG") {
@@ -1265,7 +1155,7 @@ const handleSend = async () => {
 
       // 如果是blob URL或data URL，需要上传
       if (imgSrc.startsWith("blob:") || imgSrc.startsWith("data:")) {
-        const file = await getFileFromUrl(imgSrc, node);
+        const file = await fileUtil.getFileFromUrl(imgSrc, node);
         if (file) {
           filesToUpload.push({ file, messageIndex, node });
         }
@@ -1277,6 +1167,7 @@ const handleSend = async () => {
           url: imgSrc, // 临时URL，上传完成后会更新
         });
       } else {
+        // 普通图片URL，直接推送
         messages.push({
           type: "IMAGE",
           tempId: Date.now() + Math.random(),
@@ -1300,7 +1191,7 @@ const handleSend = async () => {
 
       // 如果是blob URL，需要上传
       if (fileData.url.startsWith("blob:")) {
-        const file = await getFileFromUrl(fileData.url, node);
+        const file = await fileUtil.getFileFromUrl(fileData.url, node);
         if (file) {
           filesToUpload.push({ file, messageIndex, node });
         }
@@ -1357,7 +1248,7 @@ const handleSend = async () => {
           }
 
           // 推送URL
-          const messageType = getMessageTypeFromUrl(url);
+          const messageType = fileUtil.getMessageTypeFromUrl(url);
           messages.push({
             type: messageType,
             tempId: Date.now() + Math.random(),
@@ -1383,6 +1274,7 @@ const handleSend = async () => {
     });
   }
 
+  // 触发消息事件
   emits("message", messages);
   // 创建消息组
   const groupId = generateMessageGroupId();
@@ -1405,10 +1297,10 @@ const handleSend = async () => {
       messages,
       uploadedFiles: [],
     });
-    ElMessage.success(`消息准备完毕，包含 ${messages.length} 条内容`);
     return;
   }
 
+  // 准备上传文件
   const uploadTasks: UploadTask[] = [];
   const uploadedFiles: { url: string; key: string; fileName: string }[] = [];
   let completedCount = 0;
@@ -1417,7 +1309,6 @@ const handleSend = async () => {
 
   // 显示上传进度对话框
   showUploadProgress.value = true;
-  ElMessage.success(`开始上传 ${filesToUpload.length} 个文件`);
 
   // 上传每个文件
   for (const { file, messageIndex } of filesToUpload) {
@@ -1463,7 +1354,6 @@ const handleSend = async () => {
             if (completedCount === filesToUpload.length && !hasError) {
               messageGroup.value!.isUploading = false;
               messageGroup.value!.uploadProgress = 100;
-
               emits("message-group-ready", {
                 id: groupId,
                 messages,

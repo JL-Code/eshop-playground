@@ -100,8 +100,10 @@ interface WebSocketMessage {
         conversationId?: number;
       };
 }
-
-// 发送消息请求
+// ======================消息模型=======================
+/**
+ * 发送消息请求
+ */
 interface SendMessageRequest {
   toUserId: number;
   content: Array<MessageContent>;
@@ -109,27 +111,80 @@ interface SendMessageRequest {
   replyTo?: number;
 }
 
+/**
+ * 消息内容
+ */
 interface MessageContent {
+  /**
+   * 消息临时 id
+   */
   tempId: number;
+  /**
+   * 消息类型
+   */
   type: MessageType;
+  /**
+   * 消息内容
+   */
   content: string;
+  /**
+   * 消息 url
+   */
   url?: string;
+  /**
+   * 消息负载
+   */
   payload?: MessagePayload;
-  // 上传进度相关字段
+  /**
+   * 文件上传进度
+   */
   uploadProgress?: {
+    /**
+     * 上传进度百分比
+     */
     percent: number;
+    /**
+     * 已上传字节数
+     */
     loaded: number;
+    /**
+     * 总字节数
+     */
     total: number;
+    /**
+     * 上传速度
+     */
     speed?: number;
+    /**
+     * 剩余时间
+     */
     remainingTime?: number;
-    status: 'uploading' | 'paused' | 'completed' | 'error' | 'cancelled';
+    /**
+     * 上传状态
+     */
+    status: "uploading" | "paused" | "completed" | "error" | "cancelled";
   };
 }
 
+/**
+ * 消息负载
+ */
 interface MessagePayload {
+  /**
+   * 对象 key
+   */
   key: string;
+  /**
+   * 文件名
+   */
   fileName: string;
+  /**
+   * 文件大小
+   */
   fileSize?: number;
+  /**
+   * 文件 url
+   */
   url?: string;
 }
 

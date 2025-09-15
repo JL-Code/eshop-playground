@@ -346,6 +346,7 @@ const initQiniuService = () => {
       {
         region: "z2", // 华南区域
         domain: "upload.qiniup.com",
+        cdnDomain: "http://qiniu-eshop.oss-cn-beijing.aliyuncs.com",
       }
     );
   }

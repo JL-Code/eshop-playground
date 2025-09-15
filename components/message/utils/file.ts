@@ -182,9 +182,97 @@ const getFileIcon = (fileType: MessageType): string => {
   return iconMap[fileType] || "📎";
 };
 
+/**
+ * 根据文件扩展名或 MIME 类型判断消息类型
+ * @param url 文件URL
+ * @returns 文件类型
+ */
+const getMessageTypeFromUrl = (url: string): MessageType => {
+  const imageExtensions = [
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".bmp",
+    ".webp",
+    ".svg",
+  ];
+  const videoExtensions = [
+    ".mp4",
+    ".avi",
+    ".mov",
+    ".wmv",
+    ".flv",
+    ".webm",
+    ".mkv",
+  ];
+  const audioExtensions = [".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a"];
+
+  const lowerUrl = url.toLowerCase();
+
+  if (imageExtensions.some((ext) => lowerUrl.includes(ext))) {
+    return "IMAGE";
+  }
+  if (videoExtensions.some((ext) => lowerUrl.includes(ext))) {
+    return "VIDEO";
+  }
+  if (audioExtensions.some((ext) => lowerUrl.includes(ext))) {
+    return "VOICE";
+  }
+  if (lowerUrl.startsWith("http") || lowerUrl.startsWith("https")) {
+    return "LINK";
+  }
+  return "FILE";
+};
+
+/**
+ * 从blob URL或data URL获取File对象
+ * @param url 图片URL
+ * @param node 节点
+ * @returns 文件对象
+ */
+const getFileFromUrl = async (
+  url: string,
+  node: Node
+): Promise<File | null> => {
+  try {
+    if (node.nodeName === "IMG") {
+      // 对于图片，从img元素获取文件信息
+      const img = node as HTMLImageElement;
+      let blob: Blob;
+      let fileName: string;
+
+      if (url.startsWith("data:")) {
+        // 处理data URL (base64)
+        const response = await fetch(url);
+        blob = await response.blob();
+        fileName = `image_${Date.now()}.${blob.type.split("/")[1] || "png"}`;
+      } else {
+        // 处理blob URL
+        const response = await fetch(url);
+        blob = await response.blob();
+        fileName = `image_${Date.now()}.${blob.type.split("/")[1] || "png"}`;
+      }
+
+      return new File([blob], fileName, { type: blob.type });
+    } else if (node.nodeName === "DIV" && (node as any).fileData) {
+      // 对于文件元素，从fileData获取信息
+      const fileData = (node as any).fileData;
+      const response = await fetch(url);
+      const blob = await response.blob();
+      return new File([blob], fileData.name, { type: blob.type });
+    }
+  } catch (error) {
+    console.error("获取文件失败:", error);
+  }
+  return null;
+};
+
 export default {
   getFileIcon,
   getFileType,
   isSupportedFile,
   hasSupportedFiles,
+  getMessageTypeFromUrl,
+  getFileFromUrl,
 };
